@@ -1,0 +1,36 @@
+<svg width="64" height="64" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- WhirlpoolBee mark: a spiral vortex (whirlpool) swooshing up into a
+         striped bee monogram, on the app's signature gradient badge. -->
+    <rect width="32" height="32" rx="9" fill="url(#wbGradient)"/>
+
+    <!-- Whirlpool: a two-loop spiral swoosh, tapering to a small eye/dot -->
+    <path d="M5.8 25.6 A7.4 7.4 0 1 1 17.2 21.6 A3.8 3.8 0 1 1 12.6 16.3"
+          stroke="white" stroke-opacity="0.45" stroke-width="2.1"
+          stroke-linecap="round" fill="none"/>
+    <circle cx="12.6" cy="16.3" r="1" fill="white" fill-opacity="0.6"/>
+
+    <!-- Bee: head, striped body, wings, antennae -->
+    <g transform="translate(20, 13)">
+        <!-- wings -->
+        <ellipse cx="-4.1" cy="-1.6" rx="3.6" ry="1.9" fill="white" fill-opacity="0.5" transform="rotate(-10 -4.1 -1.6)"/>
+        <ellipse cx="4.1" cy="-1.6" rx="3.6" ry="1.9" fill="white" fill-opacity="0.5" transform="rotate(10 4.1 -1.6)"/>
+        <!-- antennae -->
+        <path d="M-1 -5.7 C -1.5 -6.9, -1.3 -7.7, -0.5 -8.2" stroke="white" stroke-width="0.9" stroke-linecap="round" fill="none"/>
+        <path d="M1 -5.7 C 1.5 -6.9, 1.3 -7.7, 0.5 -8.2" stroke="white" stroke-width="0.9" stroke-linecap="round" fill="none"/>
+        <!-- head -->
+        <circle cx="0" cy="-4.6" r="2.1" fill="white"/>
+        <!-- body -->
+        <path d="M0 -2.7 C 3.3 -2.7, 4.5 0.3, 4.1 3.3 C 3.8 5.9, 2.1 7.5, 0 7.5 C -2.1 7.5, -3.8 5.9, -4.1 3.3 C -4.5 0.3, -3.3 -2.7, 0 -2.7 Z" fill="white"/>
+        <!-- stripes -->
+        <path d="M-4.05 1.1 C -1.5 2.2, 1.5 2.2, 4.05 1.1" stroke="#3730a3" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <path d="M-3.6 4.2 C -1.3 5.1, 1.3 5.1, 3.6 4.2" stroke="#3730a3" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <defs>
+        <linearGradient id="wbGradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#fbbf24"/>
+            <stop offset="0.5" stop-color="#818cf8"/>
+            <stop offset="1" stop-color="#4338ca"/>
+        </linearGradient>
+    </defs>
+</svg>

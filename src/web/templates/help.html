@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Install & Help - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Install &amp; Help</h2>
+    <p>Get the client agent running on Windows, macOS, or Linux, and troubleshoot common issues.</p>
+</div>
+
+<section class="section">
+    <h3>1. Install the Client Agent</h3>
+    <p class="help-lead">
+        Run one command on each machine you want to monitor. It downloads
+        <code>client_agent.py</code>, sets up its own tiny Python environment,
+        and registers itself as a background service that keeps running and
+        auto-starts at login — no separate service manager to configure.
+    </p>
+
+    <div class="help-tabs" id="osTabs">
+        <button type="button" class="help-tab active" data-os="windows">🪟 Windows</button>
+        <button type="button" class="help-tab" data-os="mac">🍎 macOS</button>
+        <button type="button" class="help-tab" data-os="linux">🐧 Linux</button>
+    </div>
+
+    <div class="help-panel active" data-os="windows">
+        <p><strong>Native PowerShell — no Git Bash or WSL required.</strong> Works on any Windows 10/11 machine out of the box.</p>
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>&amp; ([scriptblock]::Create((irm "{{ server_url }}/static/client-install.ps1"))) -ServerUrl "{{ server_url }}"</code></pre>
+        </div>
+        <p class="help-note">To point the agent at a different server or watch it run in the foreground first, download and run with parameters instead:</p>
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>iwr {{ server_url }}/static/client-install.ps1 -OutFile client-install.ps1
+.\client-install.ps1 -ServerUrl "{{ server_url }}" -DebugMode</code></pre>
+        </div>
+        <p class="help-note">
+            Already have Git for Windows installed and prefer bash? The
+            original installer also works from <strong>Git Bash</strong>
+            (not PowerShell/<code>cmd.exe</code>):
+        </p>
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>curl -fsSL "{{ server_url }}/static/client-install.sh" | bash -s -- --server "{{ server_url }}"</code></pre>
+        </div>
+    </div>
+
+    <div class="help-panel" data-os="mac">
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>curl -fsSL "{{ server_url }}/static/client-install.sh" | bash -s -- --server "{{ server_url }}"</code></pre>
+        </div>
+        <p class="help-note">Custom server or foreground/debug mode:</p>
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>curl -fsSL {{ server_url }}/static/client-install.sh | bash -s -- --server {{ server_url }} --debug</code></pre>
+        </div>
+        <p class="help-note">Installs a <code>launchd</code> user agent under <code>~/Library/LaunchAgents</code> so it auto-starts at login and restarts if it ever stops.</p>
+    </div>
+
+    <div class="help-panel" data-os="linux">
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>curl -fsSL "{{ server_url }}/static/client-install.sh" | bash -s -- --server "{{ server_url }}"</code></pre>
+        </div>
+        <p class="help-note">Custom server or foreground/debug mode:</p>
+        <div class="code-block">
+            <button class="copy-btn" onclick="copyBlock(this)">Copy</button>
+            <pre><code>curl -fsSL {{ server_url }}/static/client-install.sh | bash -s -- --server {{ server_url }} --debug</code></pre>
+        </div>
+        <p class="help-note">Installs a <code>systemd --user</code> service where systemd is available, so it auto-starts at login and restarts if it ever stops.</p>
+    </div>
+</section>
+
+<section class="section">
+    <h3>2. Managing the Agent</h3>
+    <div class="help-tabs" id="osTabs2">
+        <button type="button" class="help-tab active" data-os2="windows">🪟 Windows</button>
+        <button type="button" class="help-tab" data-os2="mac">🍎 macOS</button>
+        <button type="button" class="help-tab" data-os2="linux">🐧 Linux</button>
+    </div>
+
+    <div class="help-panel active" data-os2="windows">
+        <div class="code-block"><pre><code>schtasks /query /tn ClaudeDashboardAgent /v /fo list   # status
+schtasks /end /tn ClaudeDashboardAgent                 # stop
+schtasks /change /tn ClaudeDashboardAgent /disable      # disable auto-start
+schtasks /change /tn ClaudeDashboardAgent /enable       # re-enable
+Get-Content -Wait "$env:USERPROFILE\.claude-dashboard-agent\agent.log"  # tail logs</code></pre></div>
+        <p class="help-note">Uninstall:</p>
+        <div class="code-block"><pre><code>schtasks /end /tn ClaudeDashboardAgent
+schtasks /delete /tn ClaudeDashboardAgent /f
+schtasks /delete /tn ClaudeDashboardAgentWatchdog /f
+Remove-Item -Recurse -Force "$env:USERPROFILE\.claude-dashboard-agent"</code></pre></div>
+    </div>
+
+    <div class="help-panel" data-os2="mac">
+        <div class="code-block"><pre><code>launchctl list | grep com.claude.dashboard.agent          # status
+launchctl stop com.claude.dashboard.agent                  # stop
+launchctl unload ~/Library/LaunchAgents/com.claude.dashboard.agent.plist   # disable
+launchctl load -w ~/Library/LaunchAgents/com.claude.dashboard.agent.plist  # re-enable
+tail -f ~/.claude-dashboard-agent/agent.log                 # tail logs</code></pre></div>
+        <p class="help-note">Uninstall:</p>
+        <div class="code-block"><pre><code>launchctl unload ~/Library/LaunchAgents/com.claude.dashboard.agent.plist
+rm ~/Library/LaunchAgents/com.claude.dashboard.agent.plist
+rm -rf ~/.claude-dashboard-agent</code></pre></div>
+    </div>
+
+    <div class="help-panel" data-os2="linux">
+        <div class="code-block"><pre><code>systemctl --user status claude-dashboard-agent    # status
+systemctl --user stop claude-dashboard-agent      # stop
+systemctl --user disable claude-dashboard-agent   # disable auto-start
+systemctl --user enable --now claude-dashboard-agent  # re-enable
+journalctl --user -u claude-dashboard-agent -f    # tail logs</code></pre></div>
+        <p class="help-note">Uninstall:</p>
+        <div class="code-block"><pre><code>systemctl --user stop claude-dashboard-agent
+systemctl --user disable claude-dashboard-agent
+rm ~/.config/systemd/user/claude-dashboard-agent.service
+rm -rf ~/.claude-dashboard-agent</code></pre></div>
+    </div>
+</section>
+
+<section class="section">
+    <h3>3. Troubleshooting</h3>
+    <div class="help-faq">
+        <details>
+            <summary>Windows: "bash is not recognized" / the <code>curl | bash</code> command does nothing</summary>
+            <p>That command needs a real <code>bash</code> — it only exists on Windows if Git for Windows (Git Bash) or WSL is installed. Use the native PowerShell command from the Windows tab above instead (<code>irm ... | iex</code>) — it doesn't need Git or WSL at all.</p>
+        </details>
+        <details>
+            <summary>Windows: "running scripts is disabled on this system" / execution policy error</summary>
+            <p>The PowerShell one-liner evaluates the installer in-memory. If you downloaded the <code>.ps1</code> file first and are running it directly (<code>.\client-install.ps1</code>), and see this error, run it with the policy explicitly bypassed and your server URL:</p>
+            <div class="code-block"><pre><code>powershell -ExecutionPolicy Bypass -File .\client-install.ps1 -ServerUrl "{{ server_url }}"</code></pre></div>
+        </details>
+        <details>
+            <summary>Windows: "Python was not found; run without arguments to install from the Microsoft Store..."</summary>
+            <p>This is a fake "App Execution Alias" shortcut, not a real Python error — it appears even when Python <em>is</em> installed. Go to <strong>Settings → Apps → Advanced app settings → App execution aliases</strong> and turn OFF <code>python.exe</code> and <code>python3.exe</code>, then restart your terminal and re-run the installer.</p>
+        </details>
+        <details>
+            <summary>Python 3.8+ isn't installed at all</summary>
+            <p>Install it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (Windows/macOS) or your package manager (<code>apt install python3 python3-venv</code>, <code>dnf install python3</code>, etc. on Linux), then re-run the install command.</p>
+        </details>
+        <details>
+            <summary>The Sync page shows "X failed" and it isn't clearing up, even after restarting the agent</summary>
+            <p>A failure that survives a full restart is almost always a permanent, data-level issue with a specific session file (e.g. no usable timestamp in it), not a transient network problem — restarting resets the agent's retry bookkeeping, but it will hit the exact same file-level issue again since the file itself hasn't changed. Newer agent versions self-heal common cases like this automatically on their next auto-update (see <code>/api/agent/version</code> for the version currently required). If it persists after that, check the agent's console/log output for the specific error line for that session.</p>
+        </details>
+        <details>
+            <summary>The agent doesn't seem to auto-start after a reboot/logon</summary>
+            <p><strong>Windows:</strong> confirm the task exists and is enabled: <code>schtasks /query /tn ClaudeDashboardAgent /v /fo list</code>. <strong>macOS:</strong> confirm the LaunchAgent is loaded: <code>launchctl list | grep com.claude.dashboard.agent</code>. <strong>Linux:</strong> confirm the service is enabled: <code>systemctl --user is-enabled claude-dashboard-agent</code>. If any of these come back empty/missing, re-run the install command — it always does a full clean reinstall.</p>
+        </details>
+        <details>
+            <summary>I want to point an already-installed agent at a different server</summary>
+            <p>Just re-run the install command with <code>-ServerUrl</code> (Windows) or <code>--server</code> (macOS/Linux/Git Bash) pointed at the new server — every install does a full clean reinstall first, so there's nothing to manually undo.</p>
+        </details>
+        <details>
+            <summary>Where do logs live?</summary>
+            <p><strong>Windows:</strong> <code>%USERPROFILE%\.claude-dashboard-agent\agent.log</code> and <code>agent.error.log</code>. <strong>macOS/Linux:</strong> <code>~/.claude-dashboard-agent/agent.log</code> and <code>agent.error.log</code>. A full install transcript is also kept at <code>install.log</code> in the same folder.</p>
+        </details>
+    </div>
+</section>
+
+<style>
+.help-lead { color: var(--text-secondary, #6b7280); margin-bottom: 16px; max-width: 780px; }
+.help-note { color: var(--text-secondary, #6b7280); font-size: 0.9em; margin: 14px 0 8px; }
+.help-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color, #e5e7eb); }
+.help-tab {
+    padding: 10px 18px; border: none; background: none; cursor: pointer;
+    font-size: 0.95em; font-weight: 500; color: var(--text-secondary, #6b7280);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.help-tab:hover { color: var(--text-primary, #111827); }
+.help-tab.active { color: var(--brand-primary, #4338ca); border-bottom-color: var(--brand-primary, #4338ca); }
+.help-panel { display: none; }
+.help-panel.active { display: block; }
+.code-block {
+    position: relative; background: #1e1e2e; border-radius: 8px; padding: 14px 16px;
+    margin: 8px 0 16px; overflow-x: auto;
+}
+.code-block pre { margin: 0; }
+.code-block code {
+    /* Explicitly neutralize the site-wide inline `code { background;
+       border; padding; color }` rule (meant for light-background inline
+       snippets) -- without this, its light gray pill background/border
+       shows through behind our light text on this dark block, making it
+       nearly unreadable. */
+    background: none; border: none; padding: 0; border-radius: 0;
+    color: #e2e8f0; font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 0.88em; line-height: 1.6; white-space: pre;
+}
+.copy-btn {
+    position: absolute; top: 8px; right: 8px; padding: 4px 10px; font-size: 0.78em;
+    background: rgba(255,255,255,0.12); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 5px; cursor: pointer;
+}
+.copy-btn:hover { background: rgba(255,255,255,0.22); }
+.help-faq details {
+    border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 10px; background: var(--card-bg, #fff);
+}
+.help-faq summary { cursor: pointer; font-weight: 500; }
+.help-faq p { margin: 10px 0 0; color: var(--text-secondary, #6b7280); line-height: 1.6; }
+.help-faq .code-block { margin: 10px 0 4px; }
+</style>
+
+<script>
+function switchHelpTabs(containerId, dataAttr) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.querySelectorAll('.help-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const os = btn.getAttribute('data-' + dataAttr);
+            container.querySelectorAll('.help-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll(`.help-panel[data-${dataAttr}]`).forEach(p => {
+                p.classList.toggle('active', p.getAttribute('data-' + dataAttr) === os);
+            });
+        });
+    });
+}
+switchHelpTabs('osTabs', 'os');
+switchHelpTabs('osTabs2', 'os2');
+
+function copyBlock(btn) {
+    const code = btn.parentElement.querySelector('code');
+    navigator.clipboard.writeText(code.innerText).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+}
+</script>
+{% endblock %}

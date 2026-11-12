@@ -1,0 +1,1002 @@
+{% extends "base.html" %}
+
+{% block title %}Code Analytics - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Code Analytics for <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Code Analytics</h2>
+    <p class="page-subtitle">Track code quality, file modifications, and AI suggestion impact across your projects</p>
+    {% endif %}
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">📝</div>
+        <div class="stat-content">
+            <h3 id="totalModifications">-</h3>
+            <p>Code Modifications</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">⭐</div>
+        <div class="stat-content">
+            <h3 id="avgQuality">-</h3>
+            <p>Avg Code Quality</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">✅</div>
+        <div class="stat-content">
+            <h3 id="aiAcceptanceRate">-</h3>
+            <p>AI Acceptance Rate</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">💻</div>
+        <div class="stat-content">
+            <h3 id="topLanguage">-</h3>
+            <p>Top Language</p>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('heatmap')">File Heatmap</button>
+    <button class="tab-btn" onclick="switchTab('quality')">Code Quality</button>
+    <button class="tab-btn" onclick="switchTab('languages')">Language Breakdown</button>
+    <button class="tab-btn" onclick="switchTab('suggestions')">AI Suggestions</button>
+    <button class="tab-btn" onclick="switchTab('refactoring')">Refactoring Impact</button>
+</div>
+
+<!-- File Heatmap Tab -->
+<div id="heatmapTab" class="tab-content active">
+    <div class="section-header">
+        <h3>File Modification Heatmap</h3>
+        <div class="filters">
+            <select id="heatmapDaysFilter" onchange="loadFileHeatmap()">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+            </select>
+        </div>
+    </div>
+    <div id="heatmapTable" class="table-container">
+        <div class="loading">Loading file heatmap...</div>
+    </div>
+</div>
+
+<!-- Code Quality Tab -->
+<div id="qualityTab" class="tab-content">
+    <div class="section-header">
+        <h3>Code Quality Trends</h3>
+        <p class="section-subtitle">Track quality metrics over time across your projects</p>
+    </div>
+    <div id="qualityChart" style="max-width: 900px; margin: 2rem auto;">
+        <canvas id="qualityTrendChart"></canvas>
+    </div>
+    <div id="qualityMetrics" class="content-list">
+        <div class="loading">Loading quality metrics...</div>
+    </div>
+</div>
+
+<!-- Language Breakdown Tab -->
+<div id="languagesTab" class="tab-content">
+    <div class="section-header">
+        <h3>Language Usage Breakdown</h3>
+        <p class="section-subtitle">See which programming languages you're working with most</p>
+    </div>
+    <div class="charts-row">
+        <div id="languagePieChart" style="max-width: 500px; margin: 2rem auto;">
+            <canvas id="languageDistChart"></canvas>
+        </div>
+    </div>
+    <div id="languageStats" class="content-list">
+        <div class="loading">Loading language statistics...</div>
+    </div>
+</div>
+
+<!-- AI Suggestions Tab -->
+<div id="suggestionsTab" class="tab-content">
+    <div class="section-header">
+        <h3>AI Suggestion Analytics</h3>
+        <div class="filters">
+            <select id="suggestionTypeFilter" onchange="filterSuggestions()">
+                <option value="">All Types</option>
+                <option value="code_completion">Code Completion</option>
+                <option value="refactoring">Refactoring</option>
+                <option value="bug_fix">Bug Fix</option>
+                <option value="optimization">Optimization</option>
+            </select>
+        </div>
+    </div>
+    <div id="acceptanceChart" style="max-width: 700px; margin: 2rem auto;">
+        <canvas id="acceptanceRateChart"></canvas>
+    </div>
+    <div id="suggestionsList" class="content-list">
+        <div class="loading">Loading AI suggestions...</div>
+    </div>
+</div>
+
+<!-- Refactoring Impact Tab -->
+<div id="refactoringTab" class="tab-content">
+    <div class="section-header">
+        <h3>Refactoring Impact Analysis</h3>
+        <p class="section-subtitle">Compare code quality before and after AI-assisted refactoring</p>
+    </div>
+    <div id="refactoringList" class="content-list">
+        <div class="loading">Loading refactoring impact data...</div>
+    </div>
+</div>
+
+<style>
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-top: 0.5rem;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.section-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.filters {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.filters select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.content-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.table-container {
+    overflow-x: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+}
+
+.heatmap-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.heatmap-table th {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-color);
+    position: sticky;
+    top: 0;
+}
+
+.heatmap-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.heatmap-table tr:hover {
+    background: var(--bg-secondary);
+}
+
+.file-path {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.heat-bar {
+    height: 1.5rem;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    border-radius: 0.25rem;
+    position: relative;
+    min-width: 2rem;
+}
+
+.heat-label {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.quality-card, .language-card, .suggestion-card, .refactor-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: all 0.2s;
+}
+
+.quality-card:hover, .language-card:hover, .suggestion-card:hover, .refactor-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge.high-quality {
+    background: #10b98114;
+    color: #10b981;
+}
+
+.badge.medium-quality {
+    background: #f59e0b14;
+    color: #f59e0b;
+}
+
+.badge.low-quality {
+    background: #ef444414;
+    color: #ef4444;
+}
+
+.badge.accepted {
+    background: #10b98114;
+    color: #10b981;
+}
+
+.badge.rejected {
+    background: #ef444414;
+    color: #ef4444;
+}
+
+.badge.modified {
+    background: #f59e0b14;
+    color: #f59e0b;
+}
+
+.metric-row {
+    display: flex;
+    gap: 2rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+}
+
+.metric {
+    flex: 1;
+    min-width: 120px;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 0.5rem;
+}
+
+.stat-item-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-item-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.impact-comparison {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1.5rem;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.before-metric, .after-metric {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 0.5rem;
+}
+
+.impact-arrow {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+.improvement-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #10b98114;
+    color: #10b981;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.regression-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #ef444414;
+    color: #ef4444;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.charts-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+    margin: 2rem 0;
+}
+
+.code-snippet {
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    overflow-x: auto;
+    margin-top: 0.75rem;
+}
+
+.suggestion-text {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0.75rem 0;
+}
+</style>
+
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+let currentTab = 'heatmap';
+let allSuggestions = [];
+let languageData = [];
+
+const urlParams = new URLSearchParams(window.location.search);
+
+// Filter session-scoped API calls to the currently selected machine (mirrors usage.html/insights.html)
+const _machineParam = urlParams.get('machine_id');
+const _mq = (_machineParam && _machineParam !== 'all') ? `&machine_id=${_machineParam}` : '';
+
+function switchTab(tabName) {
+    currentTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(tabName + 'Tab').classList.add('active');
+
+    // Load data for the tab
+    loadTabData(tabName);
+}
+
+async function loadTabData(tabName) {
+    switch(tabName) {
+        case 'heatmap':
+            await loadFileHeatmap();
+            break;
+        case 'quality':
+            await loadCodeQuality();
+            break;
+        case 'languages':
+            await loadLanguageBreakdown();
+            break;
+        case 'suggestions':
+            await loadAISuggestions();
+            break;
+        case 'refactoring':
+            await loadRefactoringImpact();
+            break;
+    }
+}
+
+async function loadSummary() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/analytics/summary?days=30${_mq}`);
+        const data = await response.json();
+
+        document.getElementById('totalModifications').textContent = data.total_modifications || 0;
+        document.getElementById('avgQuality').textContent = data.avg_code_quality ? data.avg_code_quality.toFixed(1) + '/100' : 'N/A';
+        document.getElementById('aiAcceptanceRate').textContent = data.ai_acceptance_rate ? data.ai_acceptance_rate.toFixed(1) + '%' : 'N/A';
+
+        // Get top language
+        if (data.language_distribution && data.language_distribution.length > 0) {
+            document.getElementById('topLanguage').textContent = data.language_distribution[0].language || 'N/A';
+        } else {
+            document.getElementById('topLanguage').textContent = 'N/A';
+        }
+    } catch (error) {
+        console.error('Failed to load summary:', error);
+    }
+}
+
+async function loadFileHeatmap() {
+    try {
+        const days = document.getElementById('heatmapDaysFilter').value;
+        const response = await fetch(`${ROOT_PATH}/api/analytics/file-heatmap?days=${days}${_mq}`);
+        const files = await response.json();
+
+        const container = document.getElementById('heatmapTable');
+        if (!files.length) {
+            container.innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No file modifications found</p>';
+            return;
+        }
+
+        const maxModifications = Math.max(...files.map(f => f.modification_count));
+
+        container.innerHTML = `
+            <table class="heatmap-table">
+                <thead>
+                    <tr>
+                        <th>File Path</th>
+                        <th>Language</th>
+                        <th>Modifications</th>
+                        <th style="min-width: 200px;">Activity</th>
+                        <th>Lines Added</th>
+                        <th>Lines Deleted</th>
+                        <th>Avg Quality</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${files.map(file => {
+                        const quality = file.avg_quality || 0;
+                        const qualityClass = quality >= 80 ? 'high-quality' : quality >= 60 ? 'medium-quality' : 'low-quality';
+                        const heatWidth = (file.modification_count / maxModifications) * 100;
+
+                        return `
+                            <tr>
+                                <td class="file-path">${escapeHtml(file.file_path)}</td>
+                                <td><span class="badge">${escapeHtml(file.language || 'Unknown')}</span></td>
+                                <td style="font-weight: 600;">${file.modification_count}</td>
+                                <td>
+                                    <div class="heat-bar" style="width: ${heatWidth}%">
+                                        <span class="heat-label">${file.modification_count}</span>
+                                    </div>
+                                </td>
+                                <td style="color: #10b981;">+${file.total_lines_added || 0}</td>
+                                <td style="color: #ef4444;">-${file.total_lines_deleted || 0}</td>
+                                <td><span class="badge ${qualityClass}">${quality.toFixed(0)}</span></td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Failed to load file heatmap:', error);
+        document.getElementById('heatmapTable').innerHTML = '<div class="error">Failed to load file heatmap</div>';
+    }
+}
+
+async function loadCodeQuality() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/analytics/code-quality?days=30${_mq}`);
+        const metrics = await response.json();
+
+        const chartWrapper = document.getElementById('qualityChart');
+        if (metrics.length > 0) {
+            chartWrapper.innerHTML = '<canvas id="qualityTrendChart"></canvas>';
+            renderQualityChart(metrics);
+            displayQualityMetrics(metrics);
+        } else {
+            if (qualityChartInstance) {
+                qualityChartInstance.destroy();
+                qualityChartInstance = null;
+            }
+            chartWrapper.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No code quality data available yet. Data will appear here once agents update and new code edits are made.</p>';
+            document.getElementById('qualityMetrics').innerHTML = '';
+        }
+    } catch (error) {
+        console.error('Failed to load code quality:', error);
+        document.getElementById('qualityMetrics').innerHTML = '<div class="error">Failed to load code quality metrics</div>';
+    }
+}
+
+let qualityChartInstance = null;
+
+function renderQualityChart(metrics) {
+    const ctx = document.getElementById('qualityTrendChart').getContext('2d');
+    const recent = metrics.slice(0, 20).reverse();
+    if (qualityChartInstance) {
+        qualityChartInstance.destroy();
+    }
+
+    qualityChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: recent.map((_, i) => `Session ${i + 1}`),
+            datasets: [
+                {
+                    label: 'Overall Quality',
+                    data: recent.map(m => m.overall_quality_score || 0),
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Maintainability',
+                    data: recent.map(m => m.maintainability_index || 0),
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Code Quality Trend Over Time'
+                }
+            }
+        }
+    });
+}
+
+function displayQualityMetrics(metrics) {
+    const container = document.getElementById('qualityMetrics');
+    container.innerHTML = metrics.slice(0, 10).map(metric => `
+        <div class="quality-card">
+            <div class="card-header">
+                <div class="card-title">Session: ${escapeHtml(metric.session_id.substring(0, 12))}...</div>
+                <span class="badge ${metric.overall_quality_score >= 80 ? 'high-quality' : metric.overall_quality_score >= 60 ? 'medium-quality' : 'low-quality'}">
+                    ${(metric.overall_quality_score || 0).toFixed(0)}/100
+                </span>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-item-value">${(metric.test_coverage_percentage || 0).toFixed(0)}%</div>
+                    <div class="stat-item-label">Test Coverage</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-item-value">${escapeHtml(metric.cyclomatic_complexity || 0)}</div>
+                    <div class="stat-item-label">Complexity</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-item-value">${(metric.maintainability_index || 0).toFixed(0)}</div>
+                    <div class="stat-item-label">Maintainability</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-item-value">${escapeHtml(metric.code_duplication_percentage || 0)}%</div>
+                    <div class="stat-item-label">Duplication</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadLanguageBreakdown() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/analytics/language-breakdown?days=30${_mq}`);
+        languageData = await response.json();
+
+        if (languageData.length > 0) {
+            renderLanguageChart(languageData);
+            displayLanguageStats(languageData);
+        } else {
+            document.getElementById('languageStats').innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No language data available</p>';
+        }
+    } catch (error) {
+        console.error('Failed to load language breakdown:', error);
+        document.getElementById('languageStats').innerHTML = '<div class="error">Failed to load language breakdown</div>';
+    }
+}
+
+let languageChartInstance = null;
+
+function renderLanguageChart(languages) {
+    const ctx = document.getElementById('languageDistChart').getContext('2d');
+    const top = languages.slice(0, 8);
+    if (languageChartInstance) {
+        languageChartInstance.destroy();
+    }
+
+    languageChartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: top.map(l => l.language),
+            datasets: [{
+                data: top.map(l => l.modifications),
+                backgroundColor: [
+                    'rgba(99, 102, 241, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(6, 182, 212, 0.8)',
+                    'rgba(139, 92, 246, 0.8)',
+                    'rgba(236, 72, 153, 0.8)',
+                    'rgba(251, 191, 36, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Language Distribution by Modifications'
+                },
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function displayLanguageStats(languages) {
+    const container = document.getElementById('languageStats');
+    container.innerHTML = languages.map(lang => `
+        <div class="language-card">
+            <div class="card-header">
+                <div class="card-title">${escapeHtml(lang.language)}</div>
+                <span class="badge">${lang.modifications} modifications</span>
+            </div>
+
+            <div class="metric-row">
+                <div class="metric">
+                    <div class="metric-label">Sessions</div>
+                    <div class="metric-value">${lang.sessions}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Lines Added</div>
+                    <div class="metric-value" style="color: #10b981;">${lang.total_lines_added || 0}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Lines Deleted</div>
+                    <div class="metric-value" style="color: #ef4444;">${lang.total_lines_deleted || 0}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Avg Quality</div>
+                    <div class="metric-value">${(lang.avg_quality || 0).toFixed(0)}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadAISuggestions() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/analytics/ai-suggestions?days=30${_mq}`);
+        allSuggestions = await response.json();
+
+        // Get acceptance rate
+        const rateResponse = await fetch(`${ROOT_PATH}/api/analytics/ai-acceptance-rate?days=30${_mq}`);
+        const rateData = await rateResponse.json();
+
+        const chartWrapper = document.getElementById('acceptanceChart');
+        if (rateData.total > 0) {
+            chartWrapper.innerHTML = '<canvas id="acceptanceRateChart"></canvas>';
+            renderAcceptanceChart(rateData);
+        } else {
+            if (acceptanceChartInstance) {
+                acceptanceChartInstance.destroy();
+                acceptanceChartInstance = null;
+            }
+            chartWrapper.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No AI suggestion data available</p>';
+        }
+        displaySuggestions(allSuggestions);
+    } catch (error) {
+        console.error('Failed to load AI suggestions:', error);
+        document.getElementById('suggestionsList').innerHTML = '<div class="error">Failed to load AI suggestions</div>';
+    }
+}
+
+let acceptanceChartInstance = null;
+
+function renderAcceptanceChart(rateData) {
+    const ctx = document.getElementById('acceptanceRateChart').getContext('2d');
+    if (acceptanceChartInstance) {
+        acceptanceChartInstance.destroy();
+    }
+
+    acceptanceChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Accepted', 'Modified', 'Rejected'],
+            datasets: [{
+                label: 'Suggestions',
+                data: [
+                    rateData.accepted || 0,
+                    rateData.modified || 0,
+                    (rateData.total || 0) - (rateData.accepted || 0) - (rateData.modified || 0)
+                ],
+                backgroundColor: [
+                    'rgba(16, 185, 129, 0.6)',
+                    'rgba(245, 158, 11, 0.6)',
+                    'rgba(239, 68, 68, 0.6)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: { beginAtZero: true }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: `AI Suggestion Acceptance Rate: ${(rateData.acceptance_rate || 0).toFixed(1)}%`
+                }
+            }
+        }
+    });
+}
+
+function displaySuggestions(suggestions) {
+    const container = document.getElementById('suggestionsList');
+    if (!suggestions.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No AI suggestions found</p>';
+        return;
+    }
+
+    container.innerHTML = suggestions.slice(0, 20).map(suggestion => {
+        const statusClass = suggestion.was_accepted ? 'accepted' : 'rejected';
+        const statusLabel = suggestion.was_accepted ? (suggestion.was_modified ? 'Modified' : 'Accepted') : 'Rejected';
+
+        return `
+            <div class="suggestion-card">
+                <div class="card-header">
+                    <div class="card-title">${escapeHtml(suggestion.suggestion_type.replace('_', ' '))}</div>
+                    <span class="badge ${statusClass}">${statusLabel}</span>
+                </div>
+
+                <p class="suggestion-text">${escapeHtml(suggestion.suggestion_text)}</p>
+
+                ${suggestion.code_before ? `
+                    <div>
+                        <strong style="font-size: 0.875rem;">Before:</strong>
+                        <div class="code-snippet">${escapeHtml(suggestion.code_before.substring(0, 200))}${suggestion.code_before.length > 200 ? '...' : ''}</div>
+                    </div>
+                ` : ''}
+
+                ${suggestion.code_after && suggestion.was_accepted ? `
+                    <div style="margin-top: 1rem;">
+                        <strong style="font-size: 0.875rem;">After:</strong>
+                        <div class="code-snippet">${escapeHtml(suggestion.code_after.substring(0, 200))}${suggestion.code_after.length > 200 ? '...' : ''}</div>
+                    </div>
+                ` : ''}
+
+                ${suggestion.acceptance_time_seconds && suggestion.was_accepted ? `
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.75rem;">
+                        Accepted in ${escapeHtml(suggestion.acceptance_time_seconds)}s
+                    </p>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function filterSuggestions() {
+    const type = document.getElementById('suggestionTypeFilter').value;
+
+    const filtered = allSuggestions.filter(s => {
+        if (type && s.suggestion_type !== type) return false;
+        return true;
+    });
+
+    displaySuggestions(filtered);
+}
+
+async function loadRefactoringImpact() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/analytics/refactoring-impact?days=30${_mq}`);
+        const impact = await response.json();
+
+        displayRefactoringImpact(impact);
+    } catch (error) {
+        console.error('Failed to load refactoring impact:', error);
+        document.getElementById('refactoringList').innerHTML = '<div class="error">Failed to load refactoring impact</div>';
+    }
+}
+
+function displayRefactoringImpact(impact) {
+    const container = document.getElementById('refactoringList');
+
+    if (!impact.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No refactoring impact data available</p>';
+        return;
+    }
+
+    // impact rows come pre-filtered/sorted server-side to only real,
+    // measured complexity reductions (see Database.get_refactoring_impact).
+    container.innerHTML = impact.map(m => {
+        const filePath = m.file_path || 'Unknown file';
+        const shortPath = filePath.length > 50 ? '...' + filePath.slice(-47) : filePath;
+
+        return `
+            <div class="refactor-card">
+                <div class="card-header">
+                    <div class="card-title" title="${escapeHtml(filePath)}">${escapeHtml(shortPath)}</div>
+                    <span class="improvement-indicator">
+                        ↓ ${m.improvement_percentage}% complexity
+                    </span>
+                </div>
+
+                <div class="impact-comparison">
+                    <div class="before-metric">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Before</div>
+                        <div style="font-size: 2rem; font-weight: 700; color: #ef4444;">
+                            ${escapeHtml(m.complexity_before)}
+                        </div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Complexity</div>
+                    </div>
+
+                    <div class="impact-arrow">→</div>
+
+                    <div class="after-metric">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">After</div>
+                        <div style="font-size: 2rem; font-weight: 700; color: #10b981;">
+                            ${escapeHtml(m.complexity_after)}
+                        </div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Complexity</div>
+                    </div>
+                </div>
+
+                <div class="stat-grid" style="margin-top: 1rem;">
+                    <div class="stat-item">
+                        <div class="stat-item-value">${(m.modification_quality_score ?? 0).toFixed(0)}</div>
+                        <div class="stat-item-label">Quality Score</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-item-value">+${escapeHtml(m.lines_added || 0)}</div>
+                        <div class="stat-item-label">Lines Added</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-item-value">-${escapeHtml(m.lines_deleted || 0)}</div>
+                        <div class="stat-item-label">Lines Deleted</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', () => {
+    loadSummary();
+    loadFileHeatmap();
+});
+
+// Expose functions used by inline HTML event handlers
+window.switchTab = switchTab;
+window.filterSuggestions = filterSuggestions;
+window.loadFileHeatmap = loadFileHeatmap;
+})();
+</script>
+{% endblock %}

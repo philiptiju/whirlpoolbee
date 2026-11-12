@@ -1,0 +1,469 @@
+{% extends "base.html" %}
+
+{% block title %}Session {{ session.session_id }} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Session Details</h2>
+    <p class="subtitle">View conversation history and session metrics</p>
+</div>
+
+<div class="session-info">
+    <div class="info-grid">
+        <div class="info-card">
+            <h3>Session Info</h3>
+            <dl>
+                <dt>Session ID:</dt>
+                <dd><code>{{ session.session_id }}</code></dd>
+
+                <dt>Started:</dt>
+                <dd data-utc="{{ session.start_time }}">{{ session.start_time }}</dd>
+
+                {% if session.end_time %}
+                <dt>Ended:</dt>
+                <dd data-utc="{{ session.end_time }}">{{ session.end_time }}</dd>
+
+                <dt>Duration:</dt>
+                <dd>{{ session.duration_seconds // 60 }} minutes</dd>
+                {% else %}
+                <dt>Status:</dt>
+                <dd><span class="status-active">Active</span></dd>
+                {% endif %}
+
+                <dt>Working Directory:</dt>
+                <dd><code>{{ session.working_directory or 'Unknown' }}</code></dd>
+
+                <dt>Model:</dt>
+                <dd>{{ session.model_name or 'Unknown' }}</dd>
+
+                <dt>User:</dt>
+                <dd>
+                    {% if session.logged_in_user %}
+                    <span class="user-tag">👤 {{ session.logged_in_user.split('<')[0].strip() }}</span>
+                    {% else %}
+                    <span class="text-muted">Unknown</span>
+                    {% endif %}
+                </dd>
+
+                <dt>Machine:</dt>
+                <dd>
+                    {% if session.machine_name %}
+                    <span class="machine-tag">{{ session.machine_name }}</span>
+                    {% else %}
+                    <span class="machine-tag">{{ session.machine_id or 'Unknown' }}</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+
+        <div class="info-card">
+            <h3>Token Usage</h3>
+            <dl>
+                <dt>Input Tokens:</dt>
+                <dd>{{ "{:,}".format(tokens.input or 0) }}</dd>
+
+                <dt>Output Tokens:</dt>
+                <dd>{{ "{:,}".format(tokens.output or 0) }}</dd>
+
+                <dt>Total Tokens:</dt>
+                <dd><strong>{{ (tokens.total or 0)|compact_number }}</strong></dd>
+
+                <dt>Estimated Cost:</dt>
+                <dd>${{ "%.2f"|format(tokens.cost or 0) }}</dd>
+            </dl>
+        </div>
+
+        <div class="info-card">
+            <h3>Tags</h3>
+            <div id="tagChips" class="tag-chips-wrap">
+                {% for t in tags %}
+                <span class="tag-chip-lg" style="background:{{ t.color }}22;color:{{ t.color }};border-color:{{ t.color }}55" data-tag-id="{{ t.id }}">
+                    {{ t.name }}
+                    <i class="material-icons tag-remove" onclick="removeTag({{ t.id }})" title="Remove tag">close</i>
+                </span>
+                {% else %}
+                <span class="text-muted" id="noTagsMsg">No tags yet.</span>
+                {% endfor %}
+            </div>
+            <div class="tag-add-row">
+                <select id="tagSelect">
+                    <option value="">Choose a tag…</option>
+                    {% for t in all_tags %}
+                    <option value="{{ t.name }}">{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="tagCustomInput" placeholder="or type a new tag" style="width:120px">
+                <button class="btn-small" type="button" onclick="addTag()">+ Add</button>
+            </div>
+            <button class="btn-small" type="button" style="margin-top:0.5rem;background:#8b5cf6" onclick="suggestTags()">✨ Suggest tags</button>
+            <div id="tagSuggestions" class="tag-suggestions"></div>
+        </div>
+    </div>
+</div>
+
+<div class="conversation">
+    <h3>Conversation History ({{ messages|length }} messages)</h3>
+
+    {% if messages %}
+    <div class="messages-container">
+        {% for message in messages %}
+        <div class="message message-{{ message.role }}">
+            <div class="message-header">
+                <span class="message-role">{{ message.role|title }}</span>
+                <span class="message-time" data-utc="{{ message.timestamp }}">{{ message.timestamp }}</span>
+                {% if message.tokens %}
+                <span class="message-tokens">{{ message.tokens|int }} tokens</span>
+                {% endif %}
+            </div>
+            <div class="message-content">
+                <pre>{{ message.content }}</pre>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No conversation history available for this session.</p>
+    {% endif %}
+</div>
+
+<div class="actions">
+    <a href="{{ request.state.root_path }}/" class="btn btn-secondary">← Back to Overview</a>
+    <a href="{{ request.state.root_path }}/raw" class="btn btn-secondary">View All Sessions</a>
+</div>
+
+<style>
+.session-info {
+    margin: 2rem 0;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.info-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.info-card h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+.info-card dl {
+    margin: 0;
+}
+
+.info-card dt {
+    font-weight: 500;
+    color: #666;
+    margin-top: 0.75rem;
+}
+
+.info-card dt:first-child {
+    margin-top: 0;
+}
+
+.info-card dd {
+    margin: 0.25rem 0 0 0;
+    color: #333;
+}
+
+.status-active {
+    color: #10b981;
+    font-weight: 600;
+}
+
+.machine-tag {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1e40af;
+    padding: 0.15rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.conversation {
+    margin: 2rem 0;
+}
+
+.conversation h3 {
+    margin-bottom: 1rem;
+}
+
+.messages-container {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.message {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.message:last-child {
+    border-bottom: none;
+}
+
+.message-user {
+    background: #f8f9fa;
+}
+
+.message-assistant {
+    background: white;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+}
+
+.message-role {
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6366f1;
+}
+
+.message-user .message-role {
+    color: #10b981;
+}
+
+.message-time {
+    color: #666;
+}
+
+.message-tokens {
+    color: #9ca3af;
+    margin-left: auto;
+}
+
+.message-content {
+    color: #1f2937;
+    line-height: 1.6;
+}
+
+.message-content pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.data-table th {
+    background: #f8f9fa;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.data-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.text-success {
+    color: #10b981;
+}
+
+.text-danger {
+    color: #ef4444;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: #9ca3af;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.actions {
+    margin: 2rem 0;
+    display: flex;
+    gap: 1rem;
+}
+
+.btn {
+    padding: 0.625rem 1.25rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: inline-block;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.tag-chips-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.tag-chip-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.2rem 0.4rem 0.2rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid;
+    text-transform: capitalize;
+}
+
+.tag-remove {
+    font-size: 0.9rem !important;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.tag-remove:hover {
+    opacity: 1;
+}
+
+.tag-add-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.tag-add-row select,
+.tag-add-row input {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.tag-suggestions {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.tag-suggestion-chip {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #ede9fe;
+    color: #6d28d9;
+    cursor: pointer;
+    border: 1px dashed #8b5cf6;
+}
+
+.tag-suggestion-chip:hover {
+    background: #ddd6fe;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SESSION_ID = {{ session.session_id|tojson }};
+
+async function refreshTags() {
+    const tags = await fetch(`${ROOT_PATH}/api/sessions/${encodeURIComponent(SESSION_ID)}/tags`).then(r => r.json());
+    const wrap = document.getElementById('tagChips');
+    if (!tags.length) {
+        wrap.innerHTML = '<span class="text-muted" id="noTagsMsg">No tags yet.</span>';
+        return;
+    }
+    wrap.innerHTML = tags.map(t => `
+        <span class="tag-chip-lg" style="background:${t.color}22;color:${t.color};border-color:${t.color}55" data-tag-id="${t.id}">
+            ${escapeHtmlLocal(t.name)}
+            <i class="material-icons tag-remove" onclick="removeTag(${t.id})" title="Remove tag">close</i>
+        </span>`).join('');
+}
+
+function escapeHtmlLocal(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+async function addTag() {
+    const select = document.getElementById('tagSelect');
+    const custom = document.getElementById('tagCustomInput');
+    const tag = (custom.value.trim() || select.value).trim();
+    if (!tag) return;
+    const res = await fetch(`${ROOT_PATH}/api/sessions/${encodeURIComponent(SESSION_ID)}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag }),
+    });
+    if (res.ok) {
+        custom.value = '';
+        select.value = '';
+        await refreshTags();
+    }
+}
+
+async function removeTag(tagId) {
+    await fetch(`${ROOT_PATH}/api/sessions/${encodeURIComponent(SESSION_ID)}/tags/${tagId}`, { method: 'DELETE' });
+    await refreshTags();
+}
+
+async function suggestTags() {
+    const data = await fetch(`${ROOT_PATH}/api/sessions/${encodeURIComponent(SESSION_ID)}/tags/suggest`).then(r => r.json());
+    const box = document.getElementById('tagSuggestions');
+    if (!data.suggestions.length) {
+        box.innerHTML = '<span class="text-muted">No suggestions based on this conversation.</span>';
+        return;
+    }
+    box.innerHTML = data.suggestions.map(s =>
+        `<span class="tag-suggestion-chip" onclick="applySuggestion('${s.name}')">+ ${escapeHtmlLocal(s.name)} (${s.confidence}%)</span>`
+    ).join('');
+}
+
+async function applySuggestion(name) {
+    await fetch(`${ROOT_PATH}/api/sessions/${encodeURIComponent(SESSION_ID)}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag: name }),
+    });
+    document.getElementById('tagSuggestions').innerHTML = '';
+    await refreshTags();
+}
+</script>
+{% endblock %}

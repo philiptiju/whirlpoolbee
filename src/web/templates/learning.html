@@ -1,0 +1,883 @@
+{% extends "base.html" %}
+
+{% block title %}Learning & Development - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Learning & Development for <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Learning & Development</h2>
+    <p class="page-subtitle">Improve your AI collaboration skills with curated best practices and learning paths</p>
+    {% endif %}
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">📚</div>
+        <div class="stat-content">
+            <h3 id="totalPractices">-</h3>
+            <p>Best Practices</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🎯</div>
+        <div class="stat-content">
+            <h3 id="skillLevel">-</h3>
+            <p>Skill Level</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🏆</div>
+        <div class="stat-content">
+            <h3 id="achievementCount">-</h3>
+            <p>Achievements</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📖</div>
+        <div class="stat-content">
+            <h3 id="learningPaths">-</h3>
+            <p>Learning Paths</p>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('practices')">Best Practices</button>
+    <button class="tab-btn" onclick="switchTab('skills')">Skills Progression</button>
+    <button class="tab-btn" onclick="switchTab('paths')">Learning Paths</button>
+    <button class="tab-btn" onclick="switchTab('community')">Community Patterns</button>
+    <button class="tab-btn" onclick="switchTab('achievements')">Achievements</button>
+</div>
+
+<!-- Best Practices Tab -->
+<div id="practicesTab" class="tab-content active">
+    <div class="section-header">
+        <h3>Best Practices Library</h3>
+        <div class="filters">
+            <select id="categoryFilter" onchange="filterPractices()">
+                <option value="">All Categories</option>
+                <option value="prompt_engineering">Prompt Engineering</option>
+                <option value="code_quality">Code Quality</option>
+                <option value="workflow">Workflow</option>
+                <option value="debugging">Debugging</option>
+            </select>
+            <select id="difficultyFilter" onchange="filterPractices()">
+                <option value="">All Levels</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+            </select>
+        </div>
+    </div>
+    <div id="practicesList" class="content-list">
+        <div class="loading">Loading best practices...</div>
+    </div>
+</div>
+
+<!-- Skills Progression Tab -->
+<div id="skillsTab" class="tab-content">
+    <div class="section-header">
+        <h3>Your Skills Progression</h3>
+        <p class="section-subtitle">Track your improvement across different skill categories</p>
+    </div>
+    <div id="skillsChart" style="max-width: 800px; margin: 2rem auto;">
+        <canvas id="skillsRadarChart"></canvas>
+    </div>
+    <div id="skillsDetails" class="content-list">
+        <div class="loading">Loading skills data...</div>
+    </div>
+</div>
+
+<!-- Learning Paths Tab -->
+<div id="pathsTab" class="tab-content">
+    <div class="section-header">
+        <h3>Learning Paths</h3>
+        <p class="section-subtitle">Structured learning journeys to master AI collaboration</p>
+    </div>
+    <div id="pathsList" class="content-list">
+        <div class="loading">Loading learning paths...</div>
+    </div>
+    <div id="pathProgress" style="margin-top: 2rem;">
+        <h4>Your Active Paths</h4>
+        <div id="activePathsList" class="content-list">
+            <div class="loading">Loading your progress...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Community Patterns Tab -->
+<div id="communityTab" class="tab-content">
+    <div class="section-header">
+        <h3>Community Patterns</h3>
+        <div class="filters">
+            <select id="patternTypeFilter" onchange="filterPatterns()">
+                <option value="">All Types</option>
+                <option value="prompt_template">Prompt Templates</option>
+                <option value="code_snippet">Code Snippets</option>
+                <option value="workflow">Workflows</option>
+            </select>
+            <select id="languageFilter" onchange="filterPatterns()">
+                <option value="">All Languages</option>
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+                <option value="typescript">TypeScript</option>
+                <option value="java">Java</option>
+                <option value="go">Go</option>
+            </select>
+        </div>
+    </div>
+    <div id="patternsList" class="content-list">
+        <div class="loading">Loading community patterns...</div>
+    </div>
+</div>
+
+<!-- Achievements Tab -->
+<div id="achievementsTab" class="tab-content">
+    <div class="section-header">
+        <h3>Your Achievements</h3>
+        <p class="section-subtitle">Celebrate your milestones and progress</p>
+    </div>
+    <div id="achievementsList" class="achievements-grid">
+        <div class="loading">Loading achievements...</div>
+    </div>
+</div>
+
+<style>
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-top: 0.5rem;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.section-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.filters {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.filters select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.content-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.practice-card, .skill-card, .path-card, .pattern-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: all 0.2s;
+}
+
+.practice-card:hover, .skill-card:hover, .path-card:hover, .pattern-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.practice-header, .path-header, .pattern-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 0.75rem;
+}
+
+.practice-title, .path-title, .pattern-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge.beginner {
+    background: #10b98114;
+    color: #10b981;
+}
+
+.badge.intermediate {
+    background: #f59e0b14;
+    color: #f59e0b;
+}
+
+.badge.advanced {
+    background: #ef444414;
+    color: #ef4444;
+}
+
+.badge.category {
+    background: var(--primary-color-light);
+    color: var(--primary-color);
+}
+
+.practice-description, .path-description, .pattern-description {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.practice-example, .pattern-content {
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    overflow-x: auto;
+}
+
+.practice-tags, .pattern-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.tag {
+    padding: 0.25rem 0.625rem;
+    background: var(--bg-secondary);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.skill-progress {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.skill-name {
+    min-width: 150px;
+    font-weight: 500;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+}
+
+.progress-text {
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.skill-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.skill-stat {
+    text-align: center;
+}
+
+.skill-stat-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.skill-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.path-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.path-step {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.path-step.completed {
+    background: var(--success-color);
+    color: white;
+}
+
+.path-step.current {
+    background: var(--primary-color);
+    color: white;
+}
+
+.path-connector {
+    flex: 1;
+    height: 2px;
+    background: var(--border-color);
+}
+
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.achievement-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.achievement-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.achievement-icon {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
+}
+
+.achievement-name {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.achievement-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.achievement-date {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.75rem;
+}
+
+.rarity-common { border-left: 4px solid #6b7280; }
+.rarity-rare { border-left: 4px solid #3b82f6; }
+.rarity-epic { border-left: 4px solid #8b5cf6; }
+.rarity-legendary { border-left: 4px solid #f59e0b; }
+
+.pattern-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.pattern-votes {
+    display: flex;
+    gap: 1rem;
+}
+
+.upvotes {
+    color: var(--success-color);
+}
+
+.usage-count {
+    color: var(--primary-color);
+}
+</style>
+
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+let currentTab = 'practices';
+let allPractices = [];
+let allPatterns = [];
+// Revisiting the Skills tab re-runs renderSkillsChart, so track the
+// instance to avoid Chart.js's "Canvas is already in use" error.
+let skillsRadarChartInstance = null;
+
+// Determine the selected machine strictly from the URL, matching every other
+// page's server-side machine_id resolution (main.py only reads the query
+// param too). Falling back to localStorage here previously caused a bug:
+// the sidebar's default/"All Machines" state stores 'all' in localStorage,
+// which then got sent as a literal machine_id to the per-user learning
+// endpoints (matching zero real machines) even when a specific machine link
+// was clicked elsewhere. Missing/'all' now means "aggregate every machine",
+// consistent with Usage/Insights.
+const urlParams = new URLSearchParams(window.location.search);
+const userId = urlParams.get('machine_id') || 'all';
+
+function switchTab(tabName) {
+    currentTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(tabName + 'Tab').classList.add('active');
+
+    // Load data for the tab
+    loadTabData(tabName);
+}
+
+async function loadTabData(tabName) {
+    switch(tabName) {
+        case 'practices':
+            await loadBestPractices();
+            break;
+        case 'skills':
+            await loadSkills();
+            break;
+        case 'paths':
+            await loadLearningPaths();
+            break;
+        case 'community':
+            await loadCommunityPatterns();
+            break;
+        case 'achievements':
+            await loadAchievements();
+            break;
+    }
+}
+
+async function loadBestPractices() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/learning/best-practices?limit=50&machine_id=${encodeURIComponent(userId)}`);
+        allPractices = await response.json();
+        displayPractices(allPractices);
+        document.getElementById('totalPractices').textContent = allPractices.length;
+    } catch (error) {
+        console.error('Failed to load best practices:', error);
+        document.getElementById('practicesList').innerHTML = '<div class="error">Failed to load best practices</div>';
+    }
+}
+
+function displayPractices(practices) {
+    const container = document.getElementById('practicesList');
+    if (!practices.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No best practices found</p>';
+        return;
+    }
+
+    container.innerHTML = practices.map(practice => `
+        <div class="practice-card">
+            <div class="practice-header">
+                <h4 class="practice-title">${escapeHtml(practice.title)}</h4>
+                <div>
+                    <span class="badge ${escapeHtml(practice.difficulty_level)}">${escapeHtml(practice.difficulty_level)}</span>
+                    <span class="badge category">${escapeHtml(practice.category.replace('_', ' '))}</span>
+                </div>
+            </div>
+            <p class="practice-description">${escapeHtml(practice.description)}</p>
+            ${practice.example_prompt ? `
+                <div class="practice-example">
+                    <strong>Example Prompt:</strong><br>
+                    ${escapeHtml(practice.example_prompt)}
+                </div>
+            ` : ''}
+            ${practice.example_code ? `
+                <div class="practice-example">
+                    <strong>Example Code:</strong><br>
+                    <pre>${escapeHtml(practice.example_code)}</pre>
+                </div>
+            ` : ''}
+            ${practice.tags ? `
+                <div class="practice-tags">
+                    ${JSON.parse(practice.tags).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function filterPractices() {
+    const category = document.getElementById('categoryFilter').value;
+    const difficulty = document.getElementById('difficultyFilter').value;
+
+    const filtered = allPractices.filter(p => {
+        if (category && p.category !== category) return false;
+        if (difficulty && p.difficulty_level !== difficulty) return false;
+        return true;
+    });
+
+    displayPractices(filtered);
+}
+
+async function loadSkills() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/learning/skills/${userId}`);
+        const skills = await response.json();
+
+        if (skills.length) {
+            const avgLevel = skills.reduce((sum, s) => sum + s.skill_level, 0) / skills.length;
+            document.getElementById('skillLevel').textContent = Math.round(avgLevel) + '/100';
+            displaySkills(skills);
+            renderSkillsChart(skills);
+        } else {
+            document.getElementById('skillsDetails').innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No skills data yet. Start using Claude to build your profile!</p>';
+        }
+    } catch (error) {
+        console.error('Failed to load skills:', error);
+        document.getElementById('skillsDetails').innerHTML = '<div class="error">Failed to load skills data</div>';
+    }
+}
+
+function displaySkills(skills) {
+    const container = document.getElementById('skillsDetails');
+    container.innerHTML = skills.map(skill => `
+        <div class="skill-card">
+            <div class="skill-progress">
+                <div class="skill-name">${escapeHtml(skill.skill_category.replace('_', ' '))}</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${skill.skill_level}%">
+                        <span class="progress-text">${skill.skill_level}/100</span>
+                    </div>
+                </div>
+            </div>
+            <div class="skill-stats">
+                <div class="skill-stat">
+                    <div class="skill-stat-value">${skill.sessions_completed}</div>
+                    <div class="skill-stat-label">Sessions</div>
+                </div>
+                <div class="skill-stat">
+                    <div class="skill-stat-value">${(skill.tokens_used / 1000).toFixed(1)}K</div>
+                    <div class="skill-stat-label">Tokens</div>
+                </div>
+                <div class="skill-stat">
+                    <div class="skill-stat-value">${skill.code_files_modified}</div>
+                    <div class="skill-stat-label">Files</div>
+                </div>
+                <div class="skill-stat">
+                    <div class="skill-stat-value">${skill.average_session_quality.toFixed(1)}</div>
+                    <div class="skill-stat-label">Quality</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderSkillsChart(skills) {
+    const ctx = document.getElementById('skillsRadarChart').getContext('2d');
+    if (skillsRadarChartInstance) {
+        skillsRadarChartInstance.destroy();
+    }
+    skillsRadarChartInstance = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: skills.map(s => s.skill_category.replace('_', ' ')),
+            datasets: [{
+                label: 'Skill Level',
+                data: skills.map(s => s.skill_level),
+                backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                borderColor: 'rgba(99, 102, 241, 1)',
+                pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        stepSize: 20
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+async function loadLearningPaths() {
+    try {
+        const [pathsResponse, progressResponse] = await Promise.all([
+            fetch(`${ROOT_PATH}/api/learning/paths`),
+            fetch(`${ROOT_PATH}/api/learning/progress/${userId}`)
+        ]);
+
+        const paths = await pathsResponse.json();
+        const progress = await progressResponse.json();
+
+        document.getElementById('learningPaths').textContent = paths.length;
+        displayLearningPaths(paths);
+        displayProgress(progress);
+    } catch (error) {
+        console.error('Failed to load learning paths:', error);
+        document.getElementById('pathsList').innerHTML = '<div class="error">Failed to load learning paths</div>';
+    }
+}
+
+function displayLearningPaths(paths) {
+    const container = document.getElementById('pathsList');
+    if (!paths.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No learning paths available</p>';
+        return;
+    }
+
+    container.innerHTML = paths.map(path => `
+        <div class="path-card">
+            <div class="path-header">
+                <h4 class="path-title">${escapeHtml(path.name)}</h4>
+                <span class="badge ${escapeHtml(path.difficulty_level)}">${escapeHtml(path.difficulty_level)}</span>
+            </div>
+            <p class="path-description">${escapeHtml(path.description)}</p>
+            <div style="display: flex; justify-content: space-between; margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
+                <span>⏱️ ${path.estimated_duration_hours} hours</span>
+                <span>🎯 ${path.completion_reward_points} points</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function displayProgress(progress) {
+    const container = document.getElementById('activePathsList');
+    if (!progress.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No active learning paths. Start one from the list above!</p>';
+        return;
+    }
+
+    container.innerHTML = progress.map(p => `
+        <div class="path-card">
+            <div class="path-header">
+                <h4 class="path-title">${escapeHtml(p.name)}</h4>
+                <span style="color: var(--success-color); font-weight: 600;">${p.progress_percentage.toFixed(1)}%</span>
+            </div>
+            <div class="progress-bar" style="margin-top: 1rem;">
+                <div class="progress-fill" style="width: ${p.progress_percentage}%"></div>
+            </div>
+            <p style="margin-top: 0.75rem; font-size: 0.875rem; color: var(--text-secondary);">
+                Step ${p.current_step} of ${JSON.parse(p.steps_completed || '[]').length} completed
+            </p>
+        </div>
+    `).join('');
+}
+
+async function loadCommunityPatterns() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/learning/community-patterns?limit=50`);
+        allPatterns = await response.json();
+        displayPatterns(allPatterns);
+    } catch (error) {
+        console.error('Failed to load community patterns:', error);
+        document.getElementById('patternsList').innerHTML = '<div class="error">Failed to load community patterns</div>';
+    }
+}
+
+function displayPatterns(patterns) {
+    const container = document.getElementById('patternsList');
+    if (!patterns.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No community patterns found</p>';
+        return;
+    }
+
+    container.innerHTML = patterns.map(pattern => `
+        <div class="pattern-card">
+            <div class="pattern-header">
+                <h4 class="pattern-title">${escapeHtml(pattern.title)}</h4>
+                <div>
+                    <span class="badge category">${escapeHtml(pattern.pattern_type.replace('_', ' '))}</span>
+                    ${pattern.language ? `<span class="badge">${escapeHtml(pattern.language)}</span>` : ''}
+                    ${pattern.is_verified ? '<span class="badge" style="background: #10b98114; color: #10b981;">✓ Verified</span>' : ''}
+                </div>
+            </div>
+            ${pattern.description ? `<p class="pattern-description">${escapeHtml(pattern.description)}</p>` : ''}
+            ${pattern.use_case ? `<p style="font-size: 0.875rem; color: var(--text-secondary);"><strong>Use case:</strong> ${escapeHtml(pattern.use_case)}</p>` : ''}
+            <div class="pattern-content">${escapeHtml(pattern.content)}</div>
+            ${pattern.tags ? `
+                <div class="pattern-tags">
+                    ${JSON.parse(pattern.tags).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            ` : ''}
+            <div class="pattern-meta">
+                <div class="pattern-votes">
+                    <span class="upvotes">👍 ${pattern.upvotes}</span>
+                    <span class="usage-count">📊 ${pattern.usage_count} uses</span>
+                </div>
+                ${pattern.success_rate ? `<span style="color: var(--success-color);">✓ ${(pattern.success_rate * 100).toFixed(0)}% success rate</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function filterPatterns() {
+    const patternType = document.getElementById('patternTypeFilter').value;
+    const language = document.getElementById('languageFilter').value;
+
+    const filtered = allPatterns.filter(p => {
+        if (patternType && p.pattern_type !== patternType) return false;
+        if (language && p.language !== language) return false;
+        return true;
+    });
+
+    displayPatterns(filtered);
+}
+
+async function loadAchievements() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/learning/achievements/${userId}`);
+        const achievements = await response.json();
+
+        document.getElementById('achievementCount').textContent = achievements.length;
+        displayAchievements(achievements);
+    } catch (error) {
+        console.error('Failed to load achievements:', error);
+        document.getElementById('achievementsList').innerHTML = '<div class="error">Failed to load achievements</div>';
+    }
+}
+
+function displayAchievements(achievements) {
+    const container = document.getElementById('achievementsList');
+    if (!achievements.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); grid-column: 1 / -1;">No achievements yet. Keep using Claude to earn badges!</p>';
+        return;
+    }
+
+    container.innerHTML = achievements.map(achievement => `
+        <div class="achievement-card rarity-${escapeHtml(achievement.rarity)}">
+            <div class="achievement-icon" style="color: ${escapeHtml(achievement.badge_color || '#6366f1')};">
+                ${escapeHtml(achievement.badge_icon || '🏆')}
+            </div>
+            <div class="achievement-name">${escapeHtml(achievement.name)}</div>
+            <div class="achievement-description">${escapeHtml(achievement.description)}</div>
+            <div class="achievement-date">
+                Earned ${new Date(achievement.earned_at).toLocaleDateString()}
+            </div>
+            <div style="margin-top: 0.5rem; color: var(--primary-color); font-weight: 600;">
+                +${achievement.points} points
+            </div>
+        </div>
+    `).join('');
+}
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', () => {
+    loadBestPractices();
+});
+
+// Expose functions used by inline HTML event handlers
+window.switchTab = switchTab;
+window.filterPractices = filterPractices;
+window.filterPatterns = filterPatterns;
+})();
+</script>
+{% endblock %}

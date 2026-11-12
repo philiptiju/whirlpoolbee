@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}WhirlpoolBee{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ request.state.root_path }}/static/img/logo.svg">
+    <link rel="stylesheet" href="{{ request.state.root_path }}/static/css/style.css?v={{ static_versions['css/style.css'] }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Mobile navigation toggle; machine filters remain in the page top bar. -->
+    <header class="mobile-topbar">
+        <button class="icon-btn" id="navOpenBtn" onclick="toggleNav()" aria-label="Open navigation">
+            <i class="material-icons">menu</i>
+        </button>
+        <div class="mobile-brand">
+            <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- WhirlpoolBee mark: a spiral vortex (whirlpool) swooshing up
+                     into a striped bee monogram, on the brand gradient badge. -->
+                <rect width="32" height="32" rx="9" fill="url(#wbGradient-m)"/>
+                <path d="M5.8 25.6 A7.4 7.4 0 1 1 17.2 21.6 A3.8 3.8 0 1 1 12.6 16.3"
+                      stroke="white" stroke-opacity="0.45" stroke-width="2.1"
+                      stroke-linecap="round" fill="none"/>
+                <circle cx="12.6" cy="16.3" r="1" fill="white" fill-opacity="0.6"/>
+                <g transform="translate(20, 13)">
+                    <ellipse cx="-4.1" cy="-1.6" rx="3.6" ry="1.9" fill="white" fill-opacity="0.5" transform="rotate(-10 -4.1 -1.6)"/>
+                    <ellipse cx="4.1" cy="-1.6" rx="3.6" ry="1.9" fill="white" fill-opacity="0.5" transform="rotate(10 4.1 -1.6)"/>
+                    <path d="M-1 -5.7 C -1.5 -6.9, -1.3 -7.7, -0.5 -8.2" stroke="white" stroke-width="0.9" stroke-linecap="round" fill="none"/>
+                    <path d="M1 -5.7 C 1.5 -6.9, 1.3 -7.7, 0.5 -8.2" stroke="white" stroke-width="0.9" stroke-linecap="round" fill="none"/>
+                    <circle cx="0" cy="-4.6" r="2.1" fill="white"/>
+                    <path d="M0 -2.7 C 3.3 -2.7, 4.5 0.3, 4.1 3.3 C 3.8 5.9, 2.1 7.5, 0 7.5 C -2.1 7.5, -3.8 5.9, -4.1 3.3 C -4.5 0.3, -3.3 -2.7, 0 -2.7 Z" fill="white"/>
+                    <path d="M-4.05 1.1 C -1.5 2.2, 1.5 2.2, 4.05 1.1" stroke="#3730a3" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <path d="M-3.6 4.2 C -1.3 5.1, 1.3 5.1, 3.6 4.2" stroke="#3730a3" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                </g>
+                <defs>
+                    <linearGradient id="wbGradient-m" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#fbbf24"/>
+                        <stop offset="0.5" stop-color="#818cf8"/>
+                        <stop offset="1" stop-color="#4338ca"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <span>WhirlpoolBee</span>
+        </div>
+    </header>
+
+    <div class="app-shell">
+        <!-- Primary navigation rail -->
+        <nav class="sidebar-nav" id="sidebarNav">
+            <div class="brand">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+                    <!-- WhirlpoolBee mark: a spiral vortex (whirlpool) swooshing up
+                         into a striped bee monogram, on the brand gradient badge. -->
+                    <rect width="32" height="32" rx="9" fill="url(#wbGradient)"/>
+                    <path d="M5.8 25.6 A7.4 7.4 0 1 1 17.2 21.6 A3.8 3.8 0 1 1 12.6 16.3"
+                          stroke="white" stroke-opacity="0.45" stroke-width="2.1"
+                          stroke-linecap="round" fill="none"/>
+                    <circle cx="12.6" cy="16.3" r="1" fill="white" fill-opacity="0.6"/>
+                    <g transform="translate(20, 13)">
+                        <ellipse cx="-4.1" cy="-1.6" rx="3.6" ry="1.9" fill="white" fill-opacity="0.5" transform="rotate(-10 -4.1 -1.6)"/>
+                        <ellipse cx="4.1" cy="-1.6" rx="3.6" ry="1.9" fill="white" fill-opacity="0.5" transform="rotate(10 4.1 -1.6)"/>
+                        <path d="M-1 -5.7 C -1.5 -6.9, -1.3 -7.7, -0.5 -8.2" stroke="white" stroke-width="0.9" stroke-linecap="round" fill="none"/>
+                        <path d="M1 -5.7 C 1.5 -6.9, 1.3 -7.7, 0.5 -8.2" stroke="white" stroke-width="0.9" stroke-linecap="round" fill="none"/>
+                        <circle cx="0" cy="-4.6" r="2.1" fill="white"/>
+                        <path d="M0 -2.7 C 3.3 -2.7, 4.5 0.3, 4.1 3.3 C 3.8 5.9, 2.1 7.5, 0 7.5 C -2.1 7.5, -3.8 5.9, -4.1 3.3 C -4.5 0.3, -3.3 -2.7, 0 -2.7 Z" fill="white"/>
+                        <path d="M-4.05 1.1 C -1.5 2.2, 1.5 2.2, 4.05 1.1" stroke="#3730a3" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                        <path d="M-3.6 4.2 C -1.3 5.1, 1.3 5.1, 3.6 4.2" stroke="#3730a3" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    </g>
+                    <defs>
+                        <linearGradient id="wbGradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#fbbf24"/>
+                            <stop offset="0.5" stop-color="#818cf8"/>
+                            <stop offset="1" stop-color="#4338ca"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span class="brand-name">WhirlpoolBee</span>
+                <button class="nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Collapse navigation" aria-label="Collapse navigation">
+                    <i class="material-icons">chevron_left</i>
+                </button>
+            </div>
+            <span id="activeTeamBadge" class="active-team-badge" style="display:none;"></span>
+
+            <ul class="nav-menu">
+                <li class="nav-section-label"><span>Monitor</span></li>
+                <li><a href="{{ request.state.root_path }}/" class="{% if request.url.path.rstrip('/') == request.state.root_path.rstrip('/') %}active{% endif %}" data-page="{{ request.state.root_path }}/" data-label="Overview">
+                    <i class="material-icons">dashboard</i><span>Overview</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/sessions" class="{% if '/sessions' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/sessions" data-label="Sessions">
+                    <i class="material-icons">history</i><span>Sessions</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/usage" class="{% if '/usage' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/usage" data-label="Usage">
+                    <i class="material-icons">bar_chart</i><span>Usage</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/insights" class="{% if '/insights' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/insights" data-label="Insights">
+                    <i class="material-icons">insights</i><span>Insights</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/benchmarking" class="{% if '/benchmarking' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/benchmarking" data-label="Benchmarking">
+                    <i class="material-icons">leaderboard</i><span>Benchmarking</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/git-pull-requests" class="{% if '/git-pull-requests' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/git-pull-requests" data-label="Git Pull Requests">
+                    <i class="material-icons">merge_type</i><span>Git Pull Requests</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/ask" class="{% if '/ask' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/ask" data-label="Ask">
+                    <i class="material-icons">chat</i><span>Ask</span>
+                </a></li>
+
+                <li class="nav-section-label"><span>Workspace</span></li>
+                <li><a href="{{ request.state.root_path }}/projects" class="{% if '/projects' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/projects" data-label="Projects">
+                    <i class="material-icons">folder_open</i><span>Projects</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/sync" class="{% if '/sync' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/sync" data-label="Sync">
+                    <i class="material-icons">sync</i><span>Sync</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/learning" class="{% if '/learning' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/learning" data-label="Learning">
+                    <i class="material-icons">school</i><span>Learning</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/leaderboard" class="{% if '/leaderboard' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/leaderboard" data-label="Leaderboard">
+                    <i class="material-icons">emoji_events</i><span>Leaderboard</span>
+                </a></li>
+                {% if request.state.is_super_user %}
+                <li><a href="{{ request.state.root_path }}/tone" class="{% if '/tone' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/tone" data-label="Conversation Tone">
+                    <i class="material-icons">forum</i><span>Conversation Tone</span>
+                </a></li>
+                {% endif %}
+
+                <li class="nav-section-label"><span>Tools</span></li>
+                <li><a href="{{ request.state.root_path }}/optimization" class="{% if '/optimization' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/optimization" data-label="AI Optimization">
+                    <i class="material-icons">auto_awesome</i><span>AI Optimization</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/analytics" class="{% if '/analytics' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/analytics" data-label="Code Analytics">
+                    <i class="material-icons">analytics</i><span>Code Analytics</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/raw" class="{% if '/raw' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/raw" data-label="Raw Data">
+                    <i class="material-icons">data_object</i><span>Raw Data</span>
+                </a></li>
+
+                {% if request.state.is_admin %}
+                <li class="nav-section-label"><span>Admin</span></li>
+                <li><a href="{{ request.state.root_path }}/users" class="{% if '/users' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/users" data-label="User Management">
+                    <i class="material-icons">manage_accounts</i><span>User Management</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/integrations/azure-devops" class="{% if '/integrations/azure-devops' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/integrations/azure-devops" data-label="Azure DevOps">
+                    <i class="material-icons">merge_type</i><span>Azure DevOps</span>
+                </a></li>
+                <li><a href="{{ request.state.root_path }}/admin/login-providers" class="{% if '/admin/login-providers' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/admin/login-providers" data-label="Login Providers">
+                    <i class="material-icons">admin_panel_settings</i><span>Login Providers</span>
+                </a></li>
+                {% endif %}
+
+                <li class="nav-section-label"><span>Help</span></li>
+                <li><a href="{{ request.state.root_path }}/help" class="{% if '/help' in request.url.path %}active{% endif %}" data-page="{{ request.state.root_path }}/help" data-label="Install &amp; Help">
+                    <i class="material-icons">help_outline</i><span>Install &amp; Help</span>
+                </a></li>
+            </ul>
+
+            {% if request.session.user %}
+            <div class="nav-user-card" title="{{ request.session.user.email }}">
+                <div class="nav-user-avatar">{{ request.session.user.name[0]|upper if request.session.user.name else '?' }}</div>
+                <div class="nav-user-meta">
+                    <span class="nav-user-name">{{ request.session.user.name }}</span>
+                    <span class="nav-user-email">{{ request.session.user.email }}</span>
+                </div>
+                <a href="{{ request.state.root_path }}/auth/logout" class="nav-user-signout" title="Sign out" aria-label="Sign out">
+                    <i class="material-icons">logout</i>
+                </a>
+            </div>
+            {% endif %}
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Machine selector top bar. Admin-only: non-admins are already
+                 server-side scoped to just their own machine(s) regardless of
+                 any machine_id/group_id they might pass (enforce_machine_scope
+                 in main.py ignores/overrides it), so this picker has nothing
+                 useful for them to do and would be misleading if shown.
+                 Lives in normal document flow above the page content (not a
+                 fixed-position drawer like the old .machine-sidebar), so it
+                 never needs margin-left/transform bookkeeping against the
+                 primary nav rail and naturally reflows on narrow viewports
+                 instead of sliding in as a separate drawer. Pages can opt
+                 out entirely via hide_machine_topbar (e.g. the Azure DevOps
+                 admin page, which is intentionally org-wide/unscoped and
+                 has nothing to filter by team or machine). -->
+            {% if request.state.is_admin and not hide_machine_topbar %}
+            <div class="machine-topbar" id="machineTopbar">
+                <div class="machine-topbar-group">
+                    <label for="teamSelect" class="machine-topbar-label">Team</label>
+                    <div class="team-filter-row">
+                        <select id="teamSelect" class="team-select" onchange="onTeamSelectChange()">
+                            <option value="">All Teams</option>
+                        </select>
+                        <button class="team-add-btn" onclick="toggleNewTeamForm()" title="Create a new team">+</button>
+                    </div>
+                    <div class="new-team-form" id="newTeamForm" style="display:none;">
+                        <input type="text" id="newTeamNameInput" placeholder="New team name" onkeydown="if(event.key==='Enter') createTeam();">
+                        <button onclick="createTeam()">Add</button>
+                    </div>
+                </div>
+
+                <div class="machine-topbar-group machine-multiselect" id="machineMultiselect">
+                    <label for="machineMultiselectBtn" class="machine-topbar-label">Machines</label>
+                    <button type="button" class="machine-multiselect-btn" id="machineMultiselectBtn" onclick="toggleMachinePanel()" aria-haspopup="true" aria-expanded="false" aria-controls="machinePanel">
+                        <i class="material-icons">dns</i>
+                        <span id="machineMultiselectLabel">Loading machines&hellip;</span>
+                        <i class="material-icons machine-multiselect-caret">expand_more</i>
+                    </button>
+                    <div class="machine-panel" id="machinePanel">
+                        <div class="machine-search-row">
+                            <i class="material-icons">search</i>
+                            <input type="text" id="machineSearchInput" class="machine-search-input" placeholder="Search machines or users..." oninput="onMachineSearchInput()">
+                        </div>
+                        <div class="machine-panel-actions">
+                            <label class="machine-select-all-row">
+                                <input type="checkbox" id="machineSelectAllCheckbox" onchange="onSelectAllToggle(this.checked)">
+                                <span>Select all</span>
+                            </label>
+                            <div class="machine-list-summary" id="machineListSummary"></div>
+                        </div>
+                        <div class="machine-list" id="machineList">
+                            <div class="loading">Loading machines...</div>
+                        </div>
+                        <div class="machine-panel-footer">
+                            <button type="button" class="btn btn-small btn-secondary" onclick="cancelMachineSelection()">Cancel</button>
+                            <button type="button" class="btn btn-small" onclick="applyMachineSelection()">Apply</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="notifyPermBtn" class="notify-perm-btn" onclick="requestNotificationPermission()" style="display:none;"></button>
+            </div>
+            {% endif %}
+            <div class="container">
+                {% block content %}{% endblock %}
+            </div>
+
+            <footer>
+                <p>
+                    <strong>WhirlpoolBee</strong> v{{ app_version() }} · Multi-Machine Analytics Platform
+                </p>
+                <p class="footer-subtitle">
+                    Real-time monitoring and insights for Claude Code usage · Agent v{{ agent_version() }}
+                </p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Backdrop shown behind the primary nav drawer when open on narrow
+         viewports (the machine top bar's selector is a popover, not a
+         drawer, and closes independently via outside-click/Escape). -->
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+
+    <script src="{{ request.state.root_path }}/static/js/datetime-utils.js?v={{ static_versions['js/datetime-utils.js'] }}"></script>
+    <script src="{{ request.state.root_path }}/static/js/charts.js?v={{ static_versions['js/charts.js'] }}"></script>
+    <script src="{{ request.state.root_path }}/static/js/pr-details.js?v={{ static_versions['js/pr-details.js'] }}"></script>
+    <script>
+        // Machine selector functionality
+        const ROOT_PATH = "{{ request.state.root_path }}";
+        const IS_ADMIN = {{ 'true' if request.state.is_admin else 'false' }};
+        const HIDE_MACHINE_TOPBAR = {{ 'true' if hide_machine_topbar else 'false' }};
+        let currentMachineId = localStorage.getItem('selectedMachineId') || 'all';
+
+        // Machine display_name/machine_name are user-controlled (derived from
+        // local git config / hostname on each agent's machine) and rendered
+        // via innerHTML below -- always escape before interpolating.
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str == null ? '' : String(str);
+            return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Team (group) scope state. currentGroupId is the *display* selection
+        // (which team is highlighted in the dropdown / used to filter the
+        // machine list); the URL's machine_id already carries the resolved
+        // scope (a single machine_id, a comma-separated list of the team's
+        // machine_ids for "All Machines" within a team, or 'all' for the
+        // whole fleet) so every existing page/endpoint filters correctly
+        // without any per-page changes.
+        let currentGroupId = new URLSearchParams(window.location.search).get('group_id') || localStorage.getItem('selectedGroupId') || '';
+        let allGroups = [];
+        let allMachinesCache = [];
+
+        // The primary nav rail is off-screen by default on viewports
+        // <=1024px (see .sidebar-nav CSS transform in the responsive rules)
+        // and is only brought on-screen via the mobile top bar's hamburger
+        // button, whose .open class toggle lives here. (The machine
+        // selector is a popover anchored to the top bar, not a drawer, so it
+        // isn't part of this backdrop.)
+        function updateBackdrop() {
+            const backdrop = document.getElementById('drawerBackdrop');
+            const navOpen = document.getElementById('sidebarNav')?.classList.contains('open');
+            if (backdrop) backdrop.classList.toggle('visible', !!navOpen);
+        }
+
+        function toggleNav() {
+            const nav = document.getElementById('sidebarNav');
+            if (!nav) return;
+            nav.classList.toggle('open');
+            updateBackdrop();
+        }
+
+        function closeDrawers() {
+            document.getElementById('sidebarNav')?.classList.remove('open');
+            updateBackdrop();
+        }
+
+        // Collapse the nav rail to icons-only on desktop (a common
+        // information-density toggle in professional dashboards); persisted
+        // so the choice survives across page loads/navigations.
+        function applyNavCollapsed(collapsed) {
+            document.body.classList.toggle('nav-collapsed', collapsed);
+            const btn = document.getElementById('navCollapseBtn');
+            if (btn) btn.querySelector('i').textContent = collapsed ? 'chevron_right' : 'chevron_left';
+        }
+        function toggleNavCollapse() {
+            const collapsed = !document.body.classList.contains('nav-collapsed');
+            localStorage.setItem('navCollapsed', collapsed ? '1' : '0');
+            applyNavCollapsed(collapsed);
+        }
+        applyNavCollapsed(localStorage.getItem('navCollapsed') === '1');
+
+        // Close the nav drawer when tapping/clicking outside it (or the
+        // backdrop), or pressing Escape, so it behaves like a standard
+        // mobile drawer. The machine-selector popover has its own
+        // independent outside-click/Escape handling (see toggleMachinePanel
+        // and its listeners below).
+        document.addEventListener('click', (evt) => {
+            const nav = document.getElementById('sidebarNav');
+            const navOpenBtn = document.getElementById('navOpenBtn');
+            const navIsOpen = nav && nav.classList.contains('open');
+            if (!navIsOpen) return;
+            const inNav = nav && nav.contains(evt.target);
+            const onNavBtn = navOpenBtn && navOpenBtn.contains(evt.target);
+            if (inNav || onNavBtn) return;
+            closeDrawers();
+        });
+        document.addEventListener('keydown', (evt) => {
+            if (evt.key === 'Escape') closeDrawers();
+        });
+        document.getElementById('drawerBackdrop')?.addEventListener('click', closeDrawers);
+
+        function timeAgo(dateString) {
+            if (!dateString) return 'never';
+            const diffMs = Date.now() - new Date(dateString).getTime();
+            if (isNaN(diffMs)) return 'never';
+            const diffSec = Math.floor(diffMs / 1000);
+            if (diffSec < 5) return 'just now';
+            if (diffSec < 60) return `${diffSec}s ago`;
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return `${diffMin}m ago`;
+            const diffHr = Math.floor(diffMin / 60);
+            if (diffHr < 24) return `${diffHr}h ago`;
+            const diffDay = Math.floor(diffHr / 24);
+            if (diffDay < 30) return `${diffDay}d ago`;
+            return new Date(dateString).toLocaleDateString();
+        }
+
+        // Track each machine's last known status so we can detect Active <-> Inactive
+        // transitions and notify the user. Populated across polling cycles, not persisted.
+        const machineStatusMap = new Map();
+        // Becomes true once the first poll has completed, so newly-registered machines
+        // discovered on later polls (not the initial snapshot) trigger a notification.
+        let machinesInitialized = false;
+
+        // Browser notification permission must be requested from inside a real user
+        // gesture (click) — Safari silently ignores requestPermission() calls made
+        // automatically on page load, and Chrome discourages/can suppress them too.
+        // So instead of auto-requesting, we show a button reflecting current status.
+        function updateNotifyButton() {
+            const btn = document.getElementById('notifyPermBtn');
+            if (!btn) return;
+            if (!('Notification' in window)) {
+                btn.style.display = 'none';
+                return;
+            }
+            btn.style.display = 'inline-block';
+            btn.classList.remove('granted', 'denied', 'default');
+            if (Notification.permission === 'granted') {
+                btn.textContent = '🔔 Notifications on';
+                btn.classList.add('granted');
+                btn.disabled = true;
+            } else if (Notification.permission === 'denied') {
+                btn.textContent = '🔕 Notifications blocked';
+                btn.classList.add('denied');
+                btn.disabled = true;
+                btn.title = 'Blocked in browser settings — enable manually for this site to receive alerts';
+            } else {
+                btn.textContent = '🔔 Enable notifications';
+                btn.classList.add('default');
+                btn.disabled = false;
+            }
+        }
+
+        function requestNotificationPermission() {
+            if (!('Notification' in window)) return;
+            Notification.requestPermission().then(() => updateNotifyButton());
+        }
+
+        updateNotifyButton();
+
+        function notifyStatusChange(machine, statusClass) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            const state = statusClass === 'active' ? 'Active' : 'Inactive';
+            new Notification(`${machine.display_name} became ${state}`);
+        }
+
+        function notifyNewMachine(machine) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            new Notification(`New user configured: ${machine.display_name}`);
+        }
+
+        // ---- Team (group) support ----
+
+        async function loadGroups() {
+            try {
+                const res = await fetch(`${ROOT_PATH}/api/groups`);
+                allGroups = await res.json();
+                const select = document.getElementById('teamSelect');
+                select.innerHTML = '<option value="">All Teams</option>';
+                allGroups.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.textContent = `${g.name} (${g.machine_count})`;
+                    select.appendChild(opt);
+                });
+                select.value = currentGroupId || '';
+                updateTeamBadge();
+            } catch (error) {
+                console.error('Failed to load groups:', error);
+            }
+        }
+
+        function updateTeamBadge() {
+            const badge = document.getElementById('activeTeamBadge');
+            if (!badge) return;
+            const group = currentGroupId ? allGroups.find(g => String(g.id) === String(currentGroupId)) : null;
+            if (group) {
+                badge.textContent = `Team: ${group.name}`;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function toggleNewTeamForm() {
+            const form = document.getElementById('newTeamForm');
+            const showing = form.style.display !== 'none' && form.style.display !== '';
+            form.style.display = showing ? 'none' : 'flex';
+            if (!showing) document.getElementById('newTeamNameInput').focus();
+        }
+
+        async function createTeam() {
+            const input = document.getElementById('newTeamNameInput');
+            const name = input.value.trim();
+            if (!name) return;
+            try {
+                const res = await fetch(`${ROOT_PATH}/api/groups`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.detail || 'Failed to create team (name may already exist)');
+                    return;
+                }
+                const group = await res.json();
+                input.value = '';
+                document.getElementById('newTeamForm').style.display = 'none';
+                await loadGroups();
+                document.getElementById('teamSelect').value = group.id;
+                onTeamSelectChange();
+            } catch (error) {
+                console.error('Failed to create team:', error);
+                alert('Failed to create team');
+            }
+        }
+
+        // Resolves a team's member machine_ids into a comma-separated string,
+        // which is passed straight through the existing `machine_id` filter
+        // param used by every page/endpoint — no per-page changes needed.
+        async function resolveGroupMachineIds(groupId) {
+            try {
+                const res = await fetch(`${ROOT_PATH}/api/groups/${groupId}/machines`);
+                const members = await res.json();
+                return members.map(m => m.machine_id).join(',');
+            } catch (error) {
+                console.error('Failed to resolve group machines:', error);
+                return '';
+            }
+        }
+
+        function onTeamSelectChange() {
+            const select = document.getElementById('teamSelect');
+            currentGroupId = select.value || '';
+            localStorage.setItem('selectedGroupId', currentGroupId);
+            updateTeamBadge();
+            renderMachineList();
+            // Re-scope the view to "All Machines" within the newly selected
+            // team (or the whole fleet if no team is selected).
+            applyScope(null);
+        }
+
+        function visibleMachines() {
+            let machines = teamScopedMachines();
+            const q = (machineSearchQuery || '').trim().toLowerCase();
+            if (q) {
+                machines = machines.filter(m => {
+                    const haystack = [m.machine_name, m.machine_id, m.logged_in_user, m.os_type]
+                        .filter(Boolean).join(' ').toLowerCase();
+                    return haystack.includes(q);
+                });
+            }
+            return machines;
+        }
+
+        let machineSearchQuery = '';
+        function onMachineSearchInput() {
+            machineSearchQuery = document.getElementById('machineSearchInput').value;
+            renderMachineList();
+        }
+
+        // Redirects `?group_id=X` (without an explicit machine_id) to the
+        // fully resolved `?machine_id=<csv>&group_id=X`, so every existing
+        // machine_id-based page/endpoint filters correctly for the team
+        // without needing any per-page awareness of groups.
+        async function ensureResolvedScope() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('machine_id')) return false; // already resolved
+            // Fall back to a group_id in the URL, or the last-selected team
+            // stored in localStorage (so team scoping survives bookmarks /
+            // fresh navigation, not just in-app nav-menu clicks).
+            const groupId = params.get('group_id') || localStorage.getItem('selectedGroupId');
+            if (!groupId) return false;
+            const csv = await resolveGroupMachineIds(groupId);
+            params.set('machine_id', csv || '__empty_team__');
+            params.set('group_id', groupId);
+            window.location.replace(`${window.location.pathname}?${params.toString()}`);
+            return true;
+        }
+
+        // ---- Machine list (multi-select) ----
+        //
+        // Selection state model:
+        //   - `appliedMachineIds === null` means "all machines in the
+        //     current team scope (or the whole fleet if no team)" -- the
+        //     same dynamic, future-proof scope the old single-select "All
+        //     Machines" option resolved to (newly-registered machines are
+        //     automatically included without the user having to re-select
+        //     anything).
+        //   - `appliedMachineIds` as an array means an explicit, static list
+        //     of machine_ids, passed straight through as the existing
+        //     comma-separated `machine_id` filter param -- no per-page or
+        //     backend changes needed, since every route already accepts a
+        //     CSV machine_id (originally added for "all machines in a
+        //     team").
+        // `draftMachineIds` mirrors the same shape but tracks in-progress
+        // checkbox edits inside the open popover panel; it's only persisted
+        // and applied (i.e. navigated) when the user clicks Apply, so
+        // rapid-fire checkbox clicks don't trigger a page reload each time.
+        function parseStoredScope(value) {
+            if (!value || value === 'all') return null;
+            return value.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        let appliedMachineIds = parseStoredScope(currentMachineId);
+        let draftMachineIds = appliedMachineIds === null ? null : [...appliedMachineIds];
+
+        // Machines within the active team (or the whole fleet if no team),
+        // ignoring the search box -- used to resolve/measure the "all"
+        // sentinel so a search filter can never silently narrow what "all"
+        // or "select all" actually means.
+        function teamScopedMachines() {
+            let machines = allMachinesCache;
+            if (currentGroupId) {
+                machines = machines.filter(m => String(m.group_id || '') === String(currentGroupId));
+            }
+            return machines;
+        }
+
+        function isDraftChecked(machineId) {
+            return draftMachineIds === null || draftMachineIds.includes(machineId);
+        }
+
+        function machineScopeLabel(ids) {
+            const total = teamScopedMachines().length;
+            if (ids === null) return total ? `All machines (${total})` : 'All machines';
+            if (!ids.length) return 'No machines selected';
+            if (ids.length >= total && total > 0) return `All machines (${total})`;
+            return `${ids.length} of ${total} selected`;
+        }
+
+        function updateMachineMultiselectButtonLabel() {
+            const label = document.getElementById('machineMultiselectLabel');
+            if (label) label.textContent = machineScopeLabel(appliedMachineIds);
+        }
+
+        function updateSelectAllCheckboxState() {
+            const checkbox = document.getElementById('machineSelectAllCheckbox');
+            if (!checkbox) return;
+            const scoped = teamScopedMachines();
+            if (draftMachineIds === null) {
+                checkbox.checked = true;
+                checkbox.indeterminate = false;
+                return;
+            }
+            if (!draftMachineIds.length) {
+                checkbox.checked = false;
+                checkbox.indeterminate = false;
+                return;
+            }
+            const scopedIds = new Set(scoped.map(m => m.machine_id));
+            const selectedInScope = draftMachineIds.filter(id => scopedIds.has(id)).length;
+            checkbox.checked = scoped.length > 0 && selectedInScope === scoped.length;
+            checkbox.indeterminate = selectedInScope > 0 && selectedInScope < scoped.length;
+        }
+
+        function onSelectAllToggle(checked) {
+            draftMachineIds = checked ? null : [];
+            renderMachineList();
+        }
+
+        // Converting from the "all" sentinel to an explicit list only
+        // happens the first time an individual box is toggled off while in
+        // "all" mode (enumerated against the *team* scope, not the
+        // search-filtered view, so a search filter never drops hidden
+        // machines out of the selection).
+        function onMachineCheckboxChange(machineId, checked) {
+            if (draftMachineIds === null) {
+                if (checked) return; // already implicitly selected
+                draftMachineIds = teamScopedMachines()
+                    .map(m => m.machine_id)
+                    .filter(id => id !== machineId);
+            } else {
+                const set = new Set(draftMachineIds);
+                if (checked) set.add(machineId); else set.delete(machineId);
+                draftMachineIds = Array.from(set);
+            }
+            updateSelectAllCheckboxState();
+        }
+
+        async function loadMachines() {
+            try {
+                const response = await fetch(`${ROOT_PATH}/api/machines`);
+                allMachinesCache = await response.json();
+                renderMachineList();
+                updateMachineMultiselectButtonLabel();
+                machinesInitialized = true;
+            } catch (error) {
+                console.error('Failed to load machines:', error);
+                document.getElementById('machineList').innerHTML = '<div class="error">Failed to load machines</div>';
+            }
+        }
+
+        function renderMachineList() {
+            const machines = visibleMachines();
+            const machineList = document.getElementById('machineList');
+            machineList.innerHTML = '';
+
+            const activeCount = machines.filter(m => new Date(m.last_seen) > new Date(Date.now() - 3600000)).length;
+            const summary = document.getElementById('machineListSummary');
+            if (summary) {
+                const noun = machines.length === 1 ? 'machine' : 'machines';
+                summary.innerHTML = machines.length
+                    ? `<span>${machines.length} ${noun}</span><span class="machine-list-summary-dot">&middot;</span><span class="text-success">${activeCount} active</span>`
+                    : '';
+            }
+
+            if (!machines.length) {
+                const empty = document.createElement('div');
+                empty.className = 'machine-list-empty';
+                empty.innerHTML = `<i class="material-icons">search_off</i><p>No machines match your search.</p>`;
+                machineList.appendChild(empty);
+                updateSelectAllCheckboxState();
+                return;
+            }
+
+            // Add each machine (filtered to the selected team/search, if any)
+            machines.forEach(machine => {
+                const checked = isDraftChecked(machine.machine_id);
+                const item = document.createElement('label');
+                item.className = 'machine-item' + (checked ? ' active' : '');
+
+                const isActive = new Date(machine.last_seen) > new Date(Date.now() - 3600000);
+                const statusClass = isActive ? 'active' : 'inactive';
+
+                const previousStatus = machineStatusMap.get(machine.machine_id);
+                if (previousStatus === undefined) {
+                    if (machinesInitialized) {
+                        notifyNewMachine(machine);
+                    }
+                } else if (previousStatus !== statusClass) {
+                    notifyStatusChange(machine, statusClass);
+                }
+                machineStatusMap.set(machine.machine_id, statusClass);
+
+                item.innerHTML = `
+                    <input type="checkbox" class="machine-item-checkbox" ${checked ? 'checked' : ''}>
+                    <div class="machine-item-head">
+                        <span class="machine-status-dot ${statusClass}" title="${isActive ? 'Active' : 'Inactive'}"></span>
+                        <div class="machine-item-title">
+                            <div class="machine-name" title="${escapeHtml(machine.display_name)}">${escapeHtml(machine.display_name)}</div>
+                        </div>
+                        <span class="machine-status ${statusClass}">${isActive ? 'Active' : 'Idle'}</span>
+                    </div>
+                `;
+                const checkbox = item.querySelector('.machine-item-checkbox');
+                checkbox.addEventListener('change', () => {
+                    onMachineCheckboxChange(machine.machine_id, checkbox.checked);
+                    item.classList.toggle('active', checkbox.checked);
+                });
+                machineList.appendChild(item);
+            });
+
+            updateSelectAllCheckboxState();
+        }
+
+        function closeMachinePanel() {
+            const panel = document.getElementById('machinePanel');
+            const btn = document.getElementById('machineMultiselectBtn');
+            panel?.classList.remove('open');
+            if (btn) {
+                btn.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        function toggleMachinePanel() {
+            const panel = document.getElementById('machinePanel');
+            const btn = document.getElementById('machineMultiselectBtn');
+            if (!panel) return;
+            const opening = !panel.classList.contains('open');
+            if (opening) {
+                // Start the draft fresh from whatever's currently applied,
+                // discarding any abandoned edits from a previous open.
+                draftMachineIds = appliedMachineIds === null ? null : [...appliedMachineIds];
+                renderMachineList();
+            }
+            panel.classList.toggle('open', opening);
+            if (btn) {
+                btn.classList.toggle('open', opening);
+                btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            }
+        }
+
+        function cancelMachineSelection() {
+            closeMachinePanel();
+        }
+
+        // Applies a selection (null = "all machines in current team scope",
+        // or an explicit array of machine_ids) and navigates, mirroring the
+        // exact resolution rules the old single-select used (so every
+        // existing page/endpoint keeps filtering correctly without any
+        // per-page changes):
+        //   - null -> if a team is active, resolve to that team's full
+        //     machine_id CSV (same as the old "All Machines" option within a
+        //     team); otherwise omit machine_id entirely (whole fleet,
+        //     unrestricted).
+        //   - an array -> a comma-separated machine_id list (the same
+        //     convention already used for "all machines in a team").
+        async function applyScope(machineIds) {
+            appliedMachineIds = machineIds === null ? null : [...machineIds];
+            const storedValue = machineIds === null ? 'all' : machineIds.join(',');
+            currentMachineId = storedValue;
+            localStorage.setItem('selectedMachineId', storedValue);
+
+            const currentPath = window.location.pathname;
+            const qs = new URLSearchParams();
+
+            if (machineIds === null) {
+                if (currentGroupId) {
+                    const csv = await resolveGroupMachineIds(currentGroupId);
+                    qs.set('machine_id', csv || '__empty_team__');
+                    qs.set('group_id', currentGroupId);
+                }
+            } else {
+                qs.set('machine_id', storedValue);
+                if (currentGroupId) qs.set('group_id', currentGroupId);
+            }
+
+            const qsStr = qs.toString();
+            window.location.href = qsStr ? `${currentPath}?${qsStr}` : currentPath;
+        }
+
+        async function applyMachineSelection() {
+            if (Array.isArray(draftMachineIds) && !draftMachineIds.length) {
+                alert('Select at least one machine (or check "Select all").');
+                return;
+            }
+            closeMachinePanel();
+            await applyScope(draftMachineIds);
+        }
+
+        // Close the machine panel when clicking outside it, or pressing
+        // Escape, discarding any unapplied draft edits -- independent of the
+        // primary nav drawer's own outside-click/Escape handling above.
+        document.addEventListener('click', (evt) => {
+            const panel = document.getElementById('machinePanel');
+            const group = document.getElementById('machineMultiselect');
+            if (!panel || !panel.classList.contains('open')) return;
+            if (group && group.contains(evt.target)) return;
+            cancelMachineSelection();
+        });
+        document.addEventListener('keydown', (evt) => {
+            if (evt.key !== 'Escape') return;
+            const panel = document.getElementById('machinePanel');
+            if (panel && panel.classList.contains('open')) cancelMachineSelection();
+        });
+
+        // Keep machine_id/group_id in nav links so filter persists across pages
+        function updateNavLinks() {
+            const params = new URLSearchParams(window.location.search);
+            const machineId = params.get('machine_id') || localStorage.getItem('selectedMachineId');
+            const groupId = params.get('group_id') || localStorage.getItem('selectedGroupId');
+            const qs = new URLSearchParams();
+            if (machineId && machineId !== 'all') qs.set('machine_id', machineId);
+            if (groupId) qs.set('group_id', groupId);
+            const qsStr = qs.toString();
+            if (qsStr) {
+                document.querySelectorAll('.nav-menu a[data-page]').forEach(link => {
+                    const page = link.getAttribute('data-page');
+                    link.href = `${page}?${qsStr}`;
+                });
+            }
+        }
+        updateNavLinks();
+
+        // Load groups + machines on page load (admin-only: the machine
+        // sidebar these populate doesn't render for non-admins at all,
+        // since their view is already server-side scoped to their own
+        // machine regardless of any machine_id/group_id — calling these
+        // would just be wasted API calls and error on the missing DOM).
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!IS_ADMIN || HIDE_MACHINE_TOPBAR) return;
+            const redirecting = await ensureResolvedScope();
+            if (redirecting) return;
+            await loadGroups();
+            loadMachines();
+            // Refresh machine list every 30 seconds
+            setInterval(loadMachines, 30000);
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

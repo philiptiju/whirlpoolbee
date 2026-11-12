@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Git Pull Requests - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🔗 Git Pull Requests</h2>
+    <p>Azure Repos PR activity and "AI-assisted PR" stats for
+        {% if selected_machine %}<strong>{{ selected_machine.display_name }}</strong>{% else %}all Claude Code users{% endif %}
+        — switch users/teams with the machine selector in the sidebar.</p>
+</div>
+
+{% if not ado_configured %}
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">settings</i> Not Configured Yet</h3>
+        <p class="text-muted">Azure DevOps integration hasn't been set up by an admin yet. Check back later, or ask an admin to configure it under Admin &gt; Azure DevOps.</p>
+    </div>
+</div>
+{% else %}
+
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">merge_type</i> AI-Assisted PR Stats</h3>
+        <p class="subtitle" style="font-size:0.85rem">PRs are linked to Claude Code sessions by matching the author's commit email against the selected user's login identity. <strong>AI %</strong> is the share of a PR's commits made while that author had an active Claude Code session running — a commit-ratio proxy, not a line-of-code diff.</p>
+        <div id="aiStats" class="stat-row" style="margin-top:1rem;"></div>
+
+        <div style="display:flex; align-items:center; gap:1rem; margin-top:1.25rem; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+                <input type="checkbox" id="aiOnlyToggle" onchange="resetAndLoadPRs()" />
+                Show AI-assisted PRs only
+            </label>
+        </div>
+        <div id="prTable" class="mini-table" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-sm" id="loadMoreBtn" onclick="loadMorePRs()" style="margin-top:0.75rem; display:none;">Load more</button>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PR_PAGE_SIZE = 25;
+let prOffset = 0;
+let prAccumulated = [];
+
+function machineQS() {
+    const mq = new URLSearchParams(window.location.search).get('machine_id');
+    return mq ? `&machine_id=${encodeURIComponent(mq)}` : '';
+}
+
+async function loadStats() {
+    const stats = await fetch(`${ROOT_PATH}/api/integrations/ado/ai-assisted-stats?days=90&known_users_only=true${machineQS()}`).then(r => r.json());
+    document.getElementById('aiStats').innerHTML = `
+        <div class="stat-box"><div class="val">${stats.total_prs}</div><div class="lbl">PRs (90d)</div></div>
+        <div class="stat-box"><div class="val">${stats.ai_assisted_pct}%</div><div class="lbl">AI-Assisted</div></div>
+        <div class="stat-box"><div class="val">${stats.sessions_involved}</div><div class="lbl">Sessions Involved</div></div>
+        <div class="stat-box"><div class="val">$${stats.cost_attributed}</div><div class="lbl">Cost Attributed</div></div>
+    `;
+}
+
+function renderPrTable() {
+    const el = document.getElementById('prTable');
+    if (!prAccumulated.length) {
+        const aiOnly = document.getElementById('aiOnlyToggle').checked;
+        el.innerHTML = `<p class="text-muted">${aiOnly ? 'No AI-assisted PRs found for this selection yet.' : 'No PRs found for this selection yet.'}</p>`;
+        return;
+    }
+    let html = '<table><thead><tr><th>PR</th><th>Project/Repo</th><th>Author</th><th>Status</th><th>AI %</th><th>Flag</th><th></th></tr></thead><tbody>';
+    prAccumulated.forEach(pr => {
+        const badge = pr.is_ai_assisted
+            ? `<span class="badge badge-success">🤖 AI-Assisted</span>`
+            : `<span class="text-muted" style="font-size:0.8rem;">— Manual</span>`;
+        html += `<tr><td>${pr.url ? `<a href="${pr.url}" target="_blank">#${pr.ado_pr_id}</a>` : '#' + pr.ado_pr_id} ${escapeHtml(pr.title || '')}</td>
+            <td>${escapeHtml(pr.ado_project)}/${escapeHtml(pr.ado_repository)}</td>
+            <td>${escapeHtml(pr.author || '')}</td><td>${pr.status}</td>
+            <td>${pr.is_ai_assisted ? pr.ai_commit_pct + '%' : '—'}</td>
+            <td>${badge}</td>
+            <td><button class="btn btn-sm" onclick="openPrDetails(${pr.id})">View Details</button></td></tr>`;
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+async function fetchPRs(offset) {
+    const aiOnly = document.getElementById('aiOnlyToggle').checked;
+    const resp = await fetch(`${ROOT_PATH}/api/integrations/ado/pull-requests?limit=${PR_PAGE_SIZE}&offset=${offset}&ai_only=${aiOnly}&known_users_only=true${machineQS()}`).then(r => r.json());
+    return resp.pull_requests;
+}
+
+function resetAndLoadPRs() {
+    prOffset = 0;
+    prAccumulated = [];
+    loadMorePRs();
+}
+
+async function loadMorePRs() {
+    const page = await fetchPRs(prOffset);
+    prAccumulated = prAccumulated.concat(page);
+    prOffset += page.length;
+    renderPrTable();
+    document.getElementById('loadMoreBtn').style.display = page.length === PR_PAGE_SIZE ? '' : 'none';
+}
+
+{% if ado_configured %}
+loadStats();
+resetAndLoadPRs();
+{% endif %}
+</script>
+{% endblock %}

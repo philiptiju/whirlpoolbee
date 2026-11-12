@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected_machine %}Projects — {{ selected_machine.display_name }}{% else %}Projects{% endif %} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Projects — <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Projects</h2>
+    <p>Working directory usage</p>
+    {% endif %}
+</div>
+
+<section class="section">
+    <h3>Top Projects by Activity</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Working Directory</th>
+                    <th>Sessions</th>
+                    <th>Hours</th>
+                    <th>Cost</th>
+                    <th>Last Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for repo in repositories %}
+                <tr>
+                    <td><code>{{ repo.working_directory }}</code></td>
+                    <td>{{ repo.session_count }}</td>
+                    <td>{{ repo.total_hours or 0 }}</td>
+                    <td class="cost">${{ "%.2f"|format(repo.total_cost or 0) }}</td>
+                    <td data-utc="{{ repo.last_active }}">{{ repo.last_active[:19] if repo.last_active else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

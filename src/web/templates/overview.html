@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected_machine %}Overview — {{ selected_machine.display_name }}{% else %}Overview{% endif %} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Overview — <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Overview</h2>
+    <p>Real-time Claude Code usage analytics</p>
+    {% endif %}
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>Total Sessions</h3>
+        <div class="stat-value">{{ stats.total_sessions }}</div>
+    </div>
+
+    <div class="stat-card">
+        <h3>Active Sessions</h3>
+        <div class="stat-value active">{{ stats.active_sessions }}</div>
+    </div>
+
+    <div class="stat-card">
+        <h3>Total Tokens</h3>
+        <div class="stat-value">{{ stats.total_tokens|compact_number }}</div>
+    </div>
+
+    <div class="stat-card">
+        <h3>Total Launches</h3>
+        <div class="stat-value">{{ stats.total_launches }}</div>
+    </div>
+
+    <div class="stat-card cost-card">
+        <h3>Total Cost</h3>
+        <div class="stat-value cost">${{ "%.2f"|format(stats.total_cost) }}</div>
+    </div>
+
+    <div class="stat-card">
+        <h3>Latest Session</h3>
+        <div class="stat-value small">
+            {% if stats.latest_session %}
+                <span data-utc="{{ stats.latest_session }}">{{ stats.latest_session[:19] }}</span>
+            {% else %}
+                Never
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if active_sessions %}
+<section class="section">
+    <h3>Active Sessions</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>Started</th>
+                    <th>Working Directory</th>
+                    <th>Model</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in active_sessions %}
+                <tr>
+                    <td>
+                        <a href="{{ request.state.root_path }}/session/{{ session.session_id }}" class="session-link">
+                            <code>{{ session.session_id[:8] }}</code>
+                        </a>
+                    </td>
+                    <td data-utc="{{ session.start_time }}">{{ session.start_time[:19] }}</td>
+                    <td><code>{{ session.working_directory }}</code></td>
+                    <td>{{ session.model_name or 'Unknown' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<section class="section">
+    <h3>Quick Actions</h3>
+    <div class="actions">
+        <button onclick="refreshData()" class="btn">Refresh Data</button>
+        <a href="{{ request.state.root_path }}/usage" class="btn">View Usage Trends</a>
+        <a href="{{ request.state.root_path }}/projects" class="btn">View Projects</a>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function refreshData() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/stats/overview`);
+        const data = await response.json();
+        location.reload();
+    } catch (error) {
+        console.error('Error refreshing data:', error);
+    }
+}
+
+// Auto-refresh every 30 seconds
+setInterval(refreshData, 30000);
+</script>
+{% endblock %}

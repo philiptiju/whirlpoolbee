@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+
+{% block title %}Login Providers - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🔐 Login Providers</h2>
+    <p class="page-subtitle">Configure SSO (Google, GitHub, Microsoft/Azure AD, or any OIDC/OAuth2 provider) and admin-created local accounts — everything here is stored in the database, no redeploy needed.</p>
+</div>
+
+<div class="card lp-section-card">
+    <div class="lp-section-header">
+        <h3>SSO Providers</h3>
+        <button class="btn btn-primary btn-sm" onclick="openProviderModal()">
+            <i class="material-icons" style="font-size:16px; vertical-align:text-bottom;">add</i> Add provider
+        </button>
+    </div>
+    <div id="lpProvidersLoading" class="loading">Loading providers...</div>
+    <div id="lpProvidersEmpty" class="empty-state" style="display:none;">
+        <p style="text-align:center; color: var(--text-secondary); padding: 2rem 1rem;">
+            No login providers configured yet. Add one above (Google, GitHub, Microsoft/Azure AD, or a generic OIDC/OAuth2 provider like Okta or Keycloak).
+        </p>
+    </div>
+    <div class="table-responsive" id="lpProvidersTableWrap" style="display:none;">
+        <table class="um-table">
+            <thead>
+                <tr>
+                    <th>Provider</th>
+                    <th>Type</th>
+                    <th>Client ID</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="lpProvidersTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card lp-section-card">
+    <div class="lp-section-header">
+        <h3>Local Accounts</h3>
+        <button class="btn btn-primary btn-sm" onclick="openLocalUserModal()">
+            <i class="material-icons" style="font-size:16px; vertical-align:text-bottom;">person_add</i> Add account
+        </button>
+    </div>
+    <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">Username/password accounts for people who can't use SSO. There's no self-service signup — only admins can create these.</p>
+    <div id="lpUsersLoading" class="loading">Loading accounts...</div>
+    <div id="lpUsersEmpty" class="empty-state" style="display:none;">
+        <p style="text-align:center; color: var(--text-secondary); padding: 2rem 1rem;">No local accounts yet.</p>
+    </div>
+    <div class="table-responsive" id="lpUsersTableWrap" style="display:none;">
+        <table class="um-table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="lpUsersTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/edit SSO provider modal -->
+<div class="pr-detail-overlay" id="lpProviderOverlay">
+    <div class="pr-detail-panel" style="max-width:560px;">
+        <div class="pr-detail-header">
+            <div><h3 id="lpProviderModalTitle">Add login provider</h3></div>
+            <button class="pr-detail-close" onclick="closeProviderModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="pr-detail-body">
+            <input type="hidden" id="lpProviderId">
+            <label class="lp-label">Provider type</label>
+            <select id="lpProviderType" class="lp-input" onchange="onProviderTypeChange()">
+                <option value="google">Google</option>
+                <option value="github">GitHub</option>
+                <option value="azure_ad">Microsoft / Azure AD</option>
+                <option value="generic_oauth2">Generic OIDC / OAuth2</option>
+            </select>
+
+            <label class="lp-label">Provider key (unique slug, e.g. "google", "okta-prod")</label>
+            <input type="text" id="lpProviderKey" class="lp-input" placeholder="google" autocomplete="off">
+
+            <label class="lp-label">Display name</label>
+            <input type="text" id="lpDisplayName" class="lp-input" placeholder="Google">
+
+            <label class="lp-label">Client ID</label>
+            <input type="text" id="lpClientId" class="lp-input" autocomplete="off">
+
+            <label class="lp-label">Client secret <span id="lpSecretHint" class="text-muted" style="font-weight:400;"></span></label>
+            <input type="password" id="lpClientSecret" class="lp-input" autocomplete="new-password">
+
+            <div id="lpTenantRow" style="display:none;">
+                <label class="lp-label">Tenant ID</label>
+                <input type="text" id="lpTenantId" class="lp-input" placeholder="common, or your Azure AD tenant GUID">
+            </div>
+
+            <div id="lpGenericUrlRows" style="display:none;">
+                <label class="lp-label">Authorization URL</label>
+                <input type="text" id="lpAuthUrl" class="lp-input">
+                <label class="lp-label">Token URL</label>
+                <input type="text" id="lpTokenUrl" class="lp-input">
+                <label class="lp-label">Userinfo URL</label>
+                <input type="text" id="lpUserinfoUrl" class="lp-input">
+            </div>
+
+            <label class="lp-label">Scopes</label>
+            <input type="text" id="lpScopes" class="lp-input" placeholder="openid email profile">
+
+            <label class="lp-checkbox-row"><input type="checkbox" id="lpEnabled" checked> Enabled</label>
+
+            <div id="lpProviderError" class="login-error" style="display:none;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.25rem;">
+                <button class="btn btn-secondary" onclick="closeProviderModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveProvider()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/edit local account modal -->
+<div class="pr-detail-overlay" id="lpUserOverlay">
+    <div class="pr-detail-panel" style="max-width:460px;">
+        <div class="pr-detail-header">
+            <div><h3 id="lpUserModalTitle">Add local account</h3></div>
+            <button class="pr-detail-close" onclick="closeLocalUserModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="pr-detail-body">
+            <input type="hidden" id="lpUserId">
+            <label class="lp-label">Email</label>
+            <input type="email" id="lpUserEmail" class="lp-input" autocomplete="off">
+            <label class="lp-label">Name</label>
+            <input type="text" id="lpUserName" class="lp-input">
+            <label class="lp-label">Password <span id="lpPasswordHint" class="text-muted" style="font-weight:400;"></span></label>
+            <input type="password" id="lpUserPassword" class="lp-input" autocomplete="new-password">
+            <label class="lp-checkbox-row"><input type="checkbox" id="lpUserEnabled" checked> Enabled</label>
+
+            <div id="lpUserError" class="login-error" style="display:none;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.25rem;">
+                <button class="btn btn-secondary" onclick="closeLocalUserModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveLocalUser()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.lp-section-card { margin-bottom: 1.5rem; padding: 1.25rem 1.5rem; }
+.lp-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+.lp-section-header h3 { margin: 0; }
+.lp-label { display: block; font-size: 0.8rem; font-weight: 600; margin: 0.85rem 0 0.3rem; color: var(--text-secondary); }
+.lp-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    font-size: 0.875rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+.lp-checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; font-size: 0.85rem; }
+.lp-provider-pill {
+    display: inline-flex; align-items: center; padding: 0.2rem 0.6rem;
+    border-radius: var(--border-radius-full); font-size: 0.75rem; font-weight: 600;
+    background: var(--gray-100); color: var(--text-secondary);
+}
+.lp-code { font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; font-size: 0.8rem; color: var(--text-muted); }
+.login-error {
+    background: var(--danger-50, #fef2f2);
+    color: var(--danger-700, #b91c1c);
+    border: 1px solid var(--danger-200, #fecaca);
+    border-radius: var(--border-radius-md, 8px);
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+let providers = [];
+let presets = {};
+let localUsers = [];
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+
+const PROVIDER_LABELS = { google: 'Google', github: 'GitHub', azure_ad: 'Microsoft / Azure AD', generic_oauth2: 'Generic OIDC/OAuth2' };
+
+async function loadProviders() {
+    try {
+        const res = await fetch(`${ROOT_PATH}/api/admin/auth-providers`);
+        const data = await res.json();
+        providers = data.providers || [];
+        presets = data.presets || {};
+        document.getElementById('lpProvidersLoading').style.display = 'none';
+        renderProviders();
+    } catch (error) {
+        console.error('Failed to load providers:', error);
+        document.getElementById('lpProvidersLoading').textContent = 'Failed to load providers.';
+    }
+}
+
+function renderProviders() {
+    const empty = document.getElementById('lpProvidersEmpty');
+    const wrap = document.getElementById('lpProvidersTableWrap');
+    if (!providers.length) {
+        empty.style.display = '';
+        wrap.style.display = 'none';
+        return;
+    }
+    empty.style.display = 'none';
+    wrap.style.display = '';
+    document.getElementById('lpProvidersTableBody').innerHTML = providers.map(p => `
+        <tr>
+            <td>${escapeHtml(p.display_name)}<div class="lp-code">${escapeHtml(p.provider_key)}</div></td>
+            <td><span class="lp-provider-pill">${escapeHtml(PROVIDER_LABELS[p.provider_type] || p.provider_type)}</span></td>
+            <td class="lp-code">${escapeHtml(p.client_id)}</td>
+            <td><span class="um-status-pill ${p.enabled ? 'active' : 'inactive'}"><span class="um-status-dot"></span>${p.enabled ? 'Enabled' : 'Disabled'}</span></td>
+            <td>
+                <button class="btn btn-sm" onclick="editProvider(${p.id})">Edit</button>
+                <button class="btn btn-sm um-delete-btn" onclick="deleteProvider(${p.id}, '${escapeHtml(p.display_name)}')">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.openProviderModal = function() {
+    document.getElementById('lpProviderModalTitle').textContent = 'Add login provider';
+    document.getElementById('lpProviderId').value = '';
+    document.getElementById('lpProviderType').value = 'google';
+    document.getElementById('lpProviderType').disabled = false;
+    document.getElementById('lpProviderKey').value = '';
+    document.getElementById('lpProviderKey').disabled = false;
+    document.getElementById('lpDisplayName').value = '';
+    document.getElementById('lpClientId').value = '';
+    document.getElementById('lpClientSecret').value = '';
+    document.getElementById('lpSecretHint').textContent = '';
+    document.getElementById('lpTenantId').value = '';
+    document.getElementById('lpAuthUrl').value = '';
+    document.getElementById('lpTokenUrl').value = '';
+    document.getElementById('lpUserinfoUrl').value = '';
+    document.getElementById('lpScopes').value = '';
+    document.getElementById('lpEnabled').checked = true;
+    document.getElementById('lpProviderError').style.display = 'none';
+    onProviderTypeChange();
+    document.getElementById('lpProviderOverlay').classList.add('visible');
+};
+
+window.closeProviderModal = function() {
+    document.getElementById('lpProviderOverlay').classList.remove('visible');
+};
+
+window.editProvider = function(id) {
+    const p = providers.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('lpProviderModalTitle').textContent = 'Edit login provider';
+    document.getElementById('lpProviderId').value = p.id;
+    document.getElementById('lpProviderType').value = p.provider_type;
+    document.getElementById('lpProviderType').disabled = true;
+    document.getElementById('lpProviderKey').value = p.provider_key;
+    document.getElementById('lpProviderKey').disabled = true;
+    document.getElementById('lpDisplayName').value = p.display_name || '';
+    document.getElementById('lpClientId').value = p.client_id || '';
+    document.getElementById('lpClientSecret').value = '';
+    document.getElementById('lpSecretHint').textContent = p.has_secret ? '(leave blank to keep current secret)' : '';
+    document.getElementById('lpTenantId').value = p.tenant_id || '';
+    document.getElementById('lpAuthUrl').value = p.authorization_url || '';
+    document.getElementById('lpTokenUrl').value = p.token_url || '';
+    document.getElementById('lpUserinfoUrl').value = p.userinfo_url || '';
+    document.getElementById('lpScopes').value = p.scopes || '';
+    document.getElementById('lpEnabled').checked = !!p.enabled;
+    document.getElementById('lpProviderError').style.display = 'none';
+    onProviderTypeChange();
+    document.getElementById('lpProviderOverlay').classList.add('visible');
+};
+
+window.onProviderTypeChange = function() {
+    const type = document.getElementById('lpProviderType').value;
+    document.getElementById('lpTenantRow').style.display = type === 'azure_ad' ? '' : 'none';
+    document.getElementById('lpGenericUrlRows').style.display = (type === 'generic_oauth2') ? '' : 'none';
+    const preset = presets[type];
+    if (preset && !document.getElementById('lpScopes').value) {
+        document.getElementById('lpScopes').value = preset.scopes || '';
+    }
+};
+
+window.saveProvider = async function() {
+    const id = document.getElementById('lpProviderId').value;
+    const body = {
+        provider_type: document.getElementById('lpProviderType').value,
+        provider_key: document.getElementById('lpProviderKey').value.trim().toLowerCase(),
+        display_name: document.getElementById('lpDisplayName').value.trim(),
+        client_id: document.getElementById('lpClientId').value.trim(),
+        client_secret: document.getElementById('lpClientSecret').value,
+        tenant_id: document.getElementById('lpTenantId').value.trim(),
+        authorization_url: document.getElementById('lpAuthUrl').value.trim(),
+        token_url: document.getElementById('lpTokenUrl').value.trim(),
+        userinfo_url: document.getElementById('lpUserinfoUrl').value.trim(),
+        scopes: document.getElementById('lpScopes').value.trim(),
+        enabled: document.getElementById('lpEnabled').checked,
+    };
+    const errEl = document.getElementById('lpProviderError');
+    errEl.style.display = 'none';
+    try {
+        const res = await fetch(id ? `${ROOT_PATH}/api/admin/auth-providers/${id}` : `${ROOT_PATH}/api/admin/auth-providers`, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        closeProviderModal();
+        await loadProviders();
+    } catch (error) {
+        errEl.textContent = error.message;
+        errEl.style.display = '';
+    }
+};
+
+window.deleteProvider = async function(id, name) {
+    if (!confirm(`Delete login provider "${name}"? Anyone using it will no longer be able to sign in with it.`)) return;
+    await fetch(`${ROOT_PATH}/api/admin/auth-providers/${id}`, { method: 'DELETE' });
+    await loadProviders();
+};
+
+async function loadLocalUsers() {
+    try {
+        const res = await fetch(`${ROOT_PATH}/api/admin/local-users`);
+        localUsers = await res.json();
+        document.getElementById('lpUsersLoading').style.display = 'none';
+        renderLocalUsers();
+    } catch (error) {
+        console.error('Failed to load local accounts:', error);
+        document.getElementById('lpUsersLoading').textContent = 'Failed to load accounts.';
+    }
+}
+
+function renderLocalUsers() {
+    const empty = document.getElementById('lpUsersEmpty');
+    const wrap = document.getElementById('lpUsersTableWrap');
+    if (!localUsers.length) {
+        empty.style.display = '';
+        wrap.style.display = 'none';
+        return;
+    }
+    empty.style.display = 'none';
+    wrap.style.display = '';
+    document.getElementById('lpUsersTableBody').innerHTML = localUsers.map(u => `
+        <tr>
+            <td>${escapeHtml(u.email)}</td>
+            <td>${escapeHtml(u.name || '')}</td>
+            <td><span class="um-status-pill ${u.enabled ? 'active' : 'inactive'}"><span class="um-status-dot"></span>${u.enabled ? 'Enabled' : 'Disabled'}</span></td>
+            <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString() : 'Never'}</td>
+            <td>
+                <button class="btn btn-sm" onclick="editLocalUser(${u.id})">Edit</button>
+                <button class="btn btn-sm um-delete-btn" onclick="deleteLocalUser(${u.id}, '${escapeHtml(u.email)}')">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.openLocalUserModal = function() {
+    document.getElementById('lpUserModalTitle').textContent = 'Add local account';
+    document.getElementById('lpUserId').value = '';
+    document.getElementById('lpUserEmail').value = '';
+    document.getElementById('lpUserEmail').disabled = false;
+    document.getElementById('lpUserName').value = '';
+    document.getElementById('lpUserPassword').value = '';
+    document.getElementById('lpPasswordHint').textContent = '';
+    document.getElementById('lpUserEnabled').checked = true;
+    document.getElementById('lpUserError').style.display = 'none';
+    document.getElementById('lpUserOverlay').classList.add('visible');
+};
+
+window.closeLocalUserModal = function() {
+    document.getElementById('lpUserOverlay').classList.remove('visible');
+};
+
+window.editLocalUser = function(id) {
+    const u = localUsers.find(x => x.id === id);
+    if (!u) return;
+    document.getElementById('lpUserModalTitle').textContent = 'Edit local account';
+    document.getElementById('lpUserId').value = u.id;
+    document.getElementById('lpUserEmail').value = u.email;
+    document.getElementById('lpUserEmail').disabled = true;
+    document.getElementById('lpUserName').value = u.name || '';
+    document.getElementById('lpUserPassword').value = '';
+    document.getElementById('lpPasswordHint').textContent = '(leave blank to keep current password)';
+    document.getElementById('lpUserEnabled').checked = !!u.enabled;
+    document.getElementById('lpUserError').style.display = 'none';
+    document.getElementById('lpUserOverlay').classList.add('visible');
+};
+
+window.saveLocalUser = async function() {
+    const id = document.getElementById('lpUserId').value;
+    const errEl = document.getElementById('lpUserError');
+    errEl.style.display = 'none';
+    try {
+        let res;
+        if (id) {
+            res = await fetch(`${ROOT_PATH}/api/admin/local-users/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: document.getElementById('lpUserName').value.trim(),
+                    password: document.getElementById('lpUserPassword').value,
+                    enabled: document.getElementById('lpUserEnabled').checked,
+                }),
+            });
+        } else {
+            res = await fetch(`${ROOT_PATH}/api/admin/local-users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: document.getElementById('lpUserEmail').value.trim(),
+                    name: document.getElementById('lpUserName').value.trim(),
+                    password: document.getElementById('lpUserPassword').value,
+                }),
+            });
+        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        closeLocalUserModal();
+        await loadLocalUsers();
+    } catch (error) {
+        errEl.textContent = error.message;
+        errEl.style.display = '';
+    }
+};
+
+window.deleteLocalUser = async function(id, email) {
+    if (!confirm(`Delete local account "${email}"?`)) return;
+    await fetch(`${ROOT_PATH}/api/admin/local-users/${id}`, { method: 'DELETE' });
+    await loadLocalUsers();
+};
+
+loadProviders();
+loadLocalUsers();
+})();
+</script>
+{% endblock %}

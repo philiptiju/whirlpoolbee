@@ -1,0 +1,744 @@
+{% extends "base.html" %}
+
+{% block title %}Leaderboard - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🏆 Leaderboard</h2>
+    <p class="page-subtitle">
+        {% if request.state.is_admin %}
+        The all-machine scoreboard — badges, points, and skill rankings across every user
+        {% else %}
+        Your badges, points, and skill ranking
+        {% endif %}
+    </p>
+    {% if selected_machine %}
+    <p class="subtitle" style="margin-top: 0.5rem;">
+        <span class="user-badge">👤 {{ selected_machine.display_name }}</span>
+        <span style="color: var(--text-muted); font-size: 0.85rem;">— your entry is highlighted below</span>
+    </p>
+    {% endif %}
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">🖥️</div>
+        <div class="stat-content">
+            <h3 id="lbMachineCount">-</h3>
+            <p>Ranked Machines</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">✨</div>
+        <div class="stat-content">
+            <h3 id="lbTotalPoints">-</h3>
+            <p>Total Points Earned</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🎖️</div>
+        <div class="stat-content">
+            <h3 id="lbTotalBadges">-</h3>
+            <p>Badges Unlocked</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">👑</div>
+        <div class="stat-content">
+            <h3 id="lbTopScorer">-</h3>
+            <p>Top Scorer</p>
+        </div>
+    </div>
+</div>
+
+<div id="lbSortBar" class="lb-sort-bar">
+    <span class="lb-sort-label">Rank by:</span>
+    <button class="lb-sort-btn active" data-sort="total_points" onclick="setLeaderboardSort('total_points')">✨ Points</button>
+    <button class="lb-sort-btn" data-sort="badge_count" onclick="setLeaderboardSort('badge_count')">🎖️ Badges</button>
+    <button class="lb-sort-btn" data-sort="avg_skill_level" onclick="setLeaderboardSort('avg_skill_level')">🎯 Skill Level</button>
+    <button class="lb-sort-btn" data-sort="sessions_completed" onclick="setLeaderboardSort('sessions_completed')">💬 Sessions</button>
+    <button class="lb-sort-btn" data-sort="tokens_used" onclick="setLeaderboardSort('tokens_used')">🔤 Tokens</button>
+</div>
+
+<div id="lbLoading" class="loading">Loading leaderboard...</div>
+<div id="lbEmpty" class="empty-state" style="display:none;">
+    <p style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem;">
+        No leaderboard data yet. Once machines start recording sessions, rankings will appear here automatically.
+    </p>
+</div>
+
+<div id="lbContent" style="display:none;">
+    <!-- Podium (top 3) -->
+    <div id="lbPodium" class="podium"></div>
+
+    <!-- Full ranked list -->
+    <div class="card lb-list-card">
+        <h3 style="padding: 1.25rem 1.5rem 0.5rem;">Full Rankings</h3>
+        <div class="table-responsive">
+            <table class="lb-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Machine / User</th>
+                        <th>Badges</th>
+                        <th>Skill Level</th>
+                        <th>Sessions</th>
+                        <th>Tokens Used</th>
+                        <th>Points</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="lbTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Badge drill-down modal: every achievement (earned or still locked)
+     behind one machine's points total, fetched on demand (not preloaded
+     for every row) to keep the initial table load light - same pattern
+     as the Conversation Tone page's detail modal. -->
+<div id="lbDetailModal" class="lb-modal-overlay" style="display:none;" onclick="if (event.target === this) closeBadgeDetails()">
+    <div class="lb-modal">
+        <div class="lb-modal-header">
+            <h3 id="lbDetailTitle">Badge Details</h3>
+            <button type="button" class="lb-modal-close" onclick="closeBadgeDetails()" aria-label="Close">&times;</button>
+        </div>
+        <div id="lbDetailBody" class="lb-modal-body">
+            <div class="loading">Loading details...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+.lb-sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 1.25rem 0;
+}
+.lb-sort-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-right: 0.25rem;
+}
+.lb-sort-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.lb-sort-btn:hover {
+    border-color: var(--primary-400);
+    color: var(--primary-600);
+}
+.lb-sort-btn.active {
+    background: var(--primary-600);
+    border-color: var(--primary-600);
+    color: #fff;
+}
+
+/* Podium */
+.podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1.25rem;
+    margin: 1.5rem 0 2rem;
+    flex-wrap: wrap;
+}
+.podium-card {
+    position: relative;
+    width: 220px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem 1rem 1.25rem;
+    text-align: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+    animation: podiumRise 0.5s ease both;
+}
+.podium-card.rank-1 {
+    order: 2;
+    width: 240px;
+    padding-top: 2.25rem;
+    border: 2px solid #eab308;
+    box-shadow: 0 10px 30px rgba(234, 179, 8, 0.25);
+}
+.podium-card.rank-2 { order: 1; margin-bottom: 0.5rem; border-color: #94a3b8; }
+.podium-card.rank-3 { order: 3; margin-bottom: 1.25rem; border-color: #b45309; }
+@keyframes podiumRise {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.podium-crown {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.75rem;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+.podium-rank-pill {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.6rem;
+    border-radius: var(--border-radius-full);
+    margin-bottom: 0.6rem;
+    color: #fff;
+}
+.rank-1 .podium-rank-pill { background: linear-gradient(135deg, #facc15, #eab308); }
+.rank-2 .podium-rank-pill { background: linear-gradient(135deg, #cbd5e1, #94a3b8); }
+.rank-3 .podium-rank-pill { background: linear-gradient(135deg, #d97706, #92400e); }
+.podium-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.6rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+}
+.podium-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    margin-bottom: 0.15rem;
+    word-break: break-word;
+}
+.podium-user {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.6rem;
+}
+.podium-points {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--primary-600);
+}
+.podium-points-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.podium-badges {
+    display: flex;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+.podium-badge-icon {
+    font-size: 1.1rem;
+    background: var(--bg-tertiary);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Table */
+.lb-list-card { margin-bottom: 2rem; }
+.table-responsive { overflow-x: auto; }
+.lb-table { width: 100%; border-collapse: collapse; }
+.lb-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.lb-table td {
+    padding: 0.9rem 1.5rem;
+    border-bottom: 1px solid var(--border-color-light);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+.lb-table tr.lb-you-row { background: var(--primary-50); }
+.lb-table tr:hover { background: var(--bg-tertiary); }
+.lb-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+}
+.lb-rank-badge.top1 { background: linear-gradient(135deg, #facc15, #eab308); color: #fff; }
+.lb-rank-badge.top2 { background: linear-gradient(135deg, #cbd5e1, #94a3b8); color: #fff; }
+.lb-rank-badge.top3 { background: linear-gradient(135deg, #d97706, #92400e); color: #fff; }
+.lb-user-cell { display: flex; align-items: center; gap: 0.65rem; }
+.lb-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+.lb-user-name { font-weight: 600; }
+.lb-user-sub { font-size: 0.75rem; color: var(--text-muted); }
+.lb-you-pill {
+    display: inline-block;
+    background: var(--primary-600);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.1rem 0.5rem;
+    border-radius: var(--border-radius-full);
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+.lb-badge-chips { display: flex; gap: 0.25rem; flex-wrap: wrap; max-width: 220px; }
+.lb-badge-chip {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    cursor: default;
+}
+.lb-badge-more { font-size: 0.75rem; color: var(--text-muted); align-self: center; }
+.lb-skill-bar-track {
+    width: 90px;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius-full);
+    overflow: hidden;
+}
+.lb-skill-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-400), var(--primary-600));
+    border-radius: var(--border-radius-full);
+}
+.lb-points-value { font-weight: 700; color: var(--primary-600); font-size: 1rem; }
+
+.lb-details-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.35rem 0.8rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.78rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+.lb-details-btn:hover { border-color: var(--primary-400); color: var(--primary-600); }
+.podium-details-link {
+    display: inline-block;
+    margin-top: 0.6rem;
+    font-size: 0.75rem;
+    color: var(--primary-600);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Badge drill-down modal */
+.lb-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.5rem;
+}
+.lb-modal {
+    background: var(--bg-primary);
+    border-radius: var(--border-radius-lg);
+    width: 100%;
+    max-width: 720px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.lb-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.lb-modal-header h3 { margin: 0; font-size: 1.05rem; }
+.lb-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+}
+.lb-modal-close:hover { color: var(--text-primary); }
+.lb-modal-body { padding: 1rem 1.5rem 1.5rem; overflow-y: auto; }
+.lb-detail-section { margin-bottom: 1.5rem; }
+.lb-detail-section:last-child { margin-bottom: 0; }
+.lb-detail-section h4 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+}
+.lb-detail-empty { color: var(--text-muted); font-size: 0.85rem; }
+.lb-badge-card {
+    display: flex;
+    gap: 0.8rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+.lb-badge-card:last-child { margin-bottom: 0; }
+.lb-badge-card.locked { opacity: 0.75; }
+.lb-badge-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+.lb-badge-card-body { flex: 1; min-width: 0; }
+.lb-badge-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.92rem;
+}
+.lb-badge-rarity-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 0.1rem 0.5rem;
+    border-radius: var(--border-radius-full);
+    background: var(--bg-primary);
+    color: var(--text-muted);
+}
+.lb-badge-points-pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--primary-600);
+    margin-left: auto;
+    white-space: nowrap;
+}
+.lb-badge-desc { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.15rem; }
+.lb-badge-explanation { font-size: 0.8rem; color: var(--text-primary); margin-top: 0.4rem; }
+.lb-badge-earned-at { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; }
+.lb-badge-progress-track {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: var(--border-radius-full);
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+.lb-badge-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-400), var(--primary-600));
+    border-radius: var(--border-radius-full);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+// For non-admins, `enforce_azure_ad_auth` middleware forces every request's
+// machine_id query param onto their own machine(s) server-side -- but that
+// rewrite only affects the ASGI request scope, it never touches the actual
+// URL shown in the browser's address bar. So `window.location.search` alone
+// would miss it for non-admins (who never have a machine_id in their visible
+// URL to begin with). SERVER_MACHINE_ID carries the already-resolved value
+// straight from the route handler and takes priority; falling back to the
+// URL param preserves the existing admin Team-filter behavior unchanged.
+const SERVER_MACHINE_ID = {{ (machine_id or '') | tojson }};
+const urlParams = new URLSearchParams(window.location.search);
+const machineScope = SERVER_MACHINE_ID || urlParams.get('machine_id') || 'all';
+// The single machine currently selected (if any) is used to highlight
+// "your" row - a leaderboard ranks everyone in scope (admins: everyone or
+// their chosen team; non-admins: just their own machine(s)).
+const myMachineId = (machineScope && machineScope !== 'all' && !machineScope.includes(',')) ? machineScope : null;
+
+let leaderboardData = [];
+let currentSort = 'total_points';
+
+const AVATAR_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#f43f5e', '#14b8a6'];
+function colorFor(id) {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+function initialsFor(entry) {
+    const name = entry.display_name || entry.machine_name || entry.machine_id || '?';
+    return name.trim().slice(0, 2).toUpperCase();
+}
+
+async function loadLeaderboard() {
+    try {
+        const qs = machineScope && machineScope !== 'all' ? `?machine_id=${encodeURIComponent(machineScope)}` : '';
+        const response = await fetch(`${ROOT_PATH}/api/learning/leaderboard${qs}`);
+        const data = await response.json();
+        leaderboardData = data.entries || [];
+
+        document.getElementById('lbLoading').style.display = 'none';
+
+        if (!leaderboardData.length) {
+            document.getElementById('lbEmpty').style.display = 'block';
+            document.getElementById('lbMachineCount').textContent = '0';
+            document.getElementById('lbTotalPoints').textContent = '0';
+            document.getElementById('lbTotalBadges').textContent = '0';
+            document.getElementById('lbTopScorer').textContent = '—';
+            return;
+        }
+
+        document.getElementById('lbContent').style.display = 'block';
+        renderSummary();
+        renderLeaderboard();
+    } catch (error) {
+        console.error('Failed to load leaderboard:', error);
+        document.getElementById('lbLoading').style.display = 'none';
+        document.getElementById('lbEmpty').style.display = 'block';
+        document.getElementById('lbEmpty').innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem;">Failed to load leaderboard data.</p>';
+    }
+}
+
+function renderSummary() {
+    const totalPoints = leaderboardData.reduce((sum, e) => sum + (e.total_points || 0), 0);
+    const totalBadges = leaderboardData.reduce((sum, e) => sum + (e.badge_count || 0), 0);
+    const top = [...leaderboardData].sort((a, b) => b.total_points - a.total_points)[0];
+
+    document.getElementById('lbMachineCount').textContent = leaderboardData.length;
+    document.getElementById('lbTotalPoints').textContent = totalPoints.toLocaleString();
+    document.getElementById('lbTotalBadges').textContent = totalBadges.toLocaleString();
+    document.getElementById('lbTopScorer').textContent = top ? (top.display_name || top.machine_name || top.machine_id) : '—';
+}
+
+function setLeaderboardSort(sortKey) {
+    currentSort = sortKey;
+    document.querySelectorAll('.lb-sort-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.sort === sortKey);
+    });
+    renderLeaderboard();
+}
+
+function sortedEntries() {
+    return [...leaderboardData].sort((a, b) => (b[currentSort] || 0) - (a[currentSort] || 0));
+}
+
+function renderLeaderboard() {
+    const entries = sortedEntries();
+    renderPodium(entries.slice(0, 3));
+    renderTable(entries);
+}
+
+function badgeChips(entry, limit) {
+    const badges = entry.badges || [];
+    const shown = badges.slice(0, limit);
+    let html = shown.map(b => `<div class="lb-badge-chip" title="${escapeHtml(b.name)} (+${b.points}pts, ${b.rarity})" style="color:${b.badge_color || '#6366f1'};">${b.badge_icon || '🏆'}</div>`).join('');
+    if (badges.length > limit) {
+        html += `<span class="lb-badge-more">+${badges.length - limit}</span>`;
+    }
+    if (!badges.length) {
+        html = '<span class="lb-badge-more">No badges yet</span>';
+    }
+    return html;
+}
+
+function renderPodium(top3) {
+    const container = document.getElementById('lbPodium');
+    if (!top3.length) { container.innerHTML = ''; return; }
+
+    const order = [1, 0, 2]; // visual order: 2nd, 1st, 3rd
+    const crowns = { 0: '👑', 1: '🥈', 2: '🥉' };
+
+    container.innerHTML = order
+        .filter(i => top3[i])
+        .map(i => {
+            const e = top3[i];
+            const rank = i + 1;
+            const isMe = myMachineId && e.machine_id === myMachineId;
+            return `
+                <div class="podium-card rank-${rank}">
+                    ${rank === 1 ? '<div class="podium-crown">👑</div>' : ''}
+                    <div class="podium-rank-pill">${crowns[i]} RANK #${rank}</div>
+                    <div class="podium-avatar" style="background:${colorFor(e.machine_id)};">${initialsFor(e)}</div>
+                    <div class="podium-name">${escapeHtml(e.display_name || e.machine_name)}${isMe ? '<span class="lb-you-pill">YOU</span>' : ''}</div>
+                    <div class="podium-user">${escapeHtml(e.machine_name)}</div>
+                    <div class="podium-points">${(e.total_points || 0).toLocaleString()}</div>
+                    <div class="podium-points-label">points</div>
+                    <div class="podium-badges">${badgeChips(e, 5)}</div>
+                    <div class="podium-details-link" onclick="openBadgeDetails('${escapeHtml(e.machine_id)}')">View badge details →</div>
+                </div>
+            `;
+        }).join('');
+}
+
+function renderTable(entries) {
+    const tbody = document.getElementById('lbTableBody');
+    tbody.innerHTML = entries.map((e, idx) => {
+        const rank = idx + 1;
+        const isMe = myMachineId && e.machine_id === myMachineId;
+        const rankClass = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : '';
+        const skillPct = Math.max(0, Math.min(100, e.avg_skill_level || 0));
+        return `
+            <tr class="${isMe ? 'lb-you-row' : ''}">
+                <td><span class="lb-rank-badge ${rankClass}">${rank}</span></td>
+                <td>
+                    <div class="lb-user-cell">
+                        <div class="lb-avatar" style="background:${colorFor(e.machine_id)};">${initialsFor(e)}</div>
+                        <div>
+                            <div class="lb-user-name">${escapeHtml(e.display_name || e.machine_name)}${isMe ? '<span class="lb-you-pill">YOU</span>' : ''}</div>
+                            <div class="lb-user-sub">${escapeHtml(e.machine_name)} · ${e.badge_count}/${e.total_badges_available} badges</div>
+                        </div>
+                    </div>
+                </td>
+                <td><div class="lb-badge-chips">${badgeChips(e, 4)}</div></td>
+                <td>
+                    <div class="lb-skill-bar-track"><div class="lb-skill-bar-fill" style="width:${skillPct}%;"></div></div>
+                    <span style="font-size:0.75rem; color: var(--text-muted);">${skillPct.toFixed(0)}</span>
+                </td>
+                <td>${e.sessions_completed || 0}</td>
+                <td>${(e.tokens_used || 0).toLocaleString()}</td>
+                <td><span class="lb-points-value">${(e.total_points || 0).toLocaleString()}</span></td>
+                <td><button type="button" class="lb-details-btn" onclick="openBadgeDetails('${escapeHtml(e.machine_id)}')">View details</button></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+
+function renderBadgeCard(badge, earned) {
+    const rarity = badge.rarity ? escapeHtml(badge.rarity) : '';
+    const earnedAt = earned && badge.earned_at
+        ? `<div class="lb-badge-earned-at">Earned ${escapeHtml(new Date(badge.earned_at).toLocaleDateString())}</div>`
+        : '';
+    const progressBar = earned ? '' : `
+        <div class="lb-badge-progress-track">
+            <div class="lb-badge-progress-fill" style="width:${badge.progress_pct || 0}%;"></div>
+        </div>
+        <div style="font-size:0.7rem; color: var(--text-muted); margin-top:0.2rem;">${(badge.progress_pct || 0).toFixed(0)}% complete</div>
+    `;
+    return `
+        <div class="lb-badge-card ${earned ? '' : 'locked'}">
+            <div class="lb-badge-card-icon" style="color:${badge.badge_color || '#6366f1'};">${badge.badge_icon || (earned ? '🏆' : '🔒')}</div>
+            <div class="lb-badge-card-body">
+                <div class="lb-badge-card-title">
+                    ${escapeHtml(badge.name)}
+                    ${rarity ? `<span class="lb-badge-rarity-pill">${rarity}</span>` : ''}
+                    <span class="lb-badge-points-pill">+${badge.points} pts</span>
+                </div>
+                <div class="lb-badge-desc">${escapeHtml(badge.description || '')}</div>
+                <div class="lb-badge-explanation">${escapeHtml(badge.explanation)}</div>
+                ${progressBar}
+                ${earnedAt}
+            </div>
+        </div>
+    `;
+}
+
+async function openBadgeDetails(machineId) {
+    const modal = document.getElementById('lbDetailModal');
+    const body = document.getElementById('lbDetailBody');
+    document.getElementById('lbDetailTitle').textContent = 'Badge Details';
+    body.innerHTML = '<div class="loading">Loading details...</div>';
+    modal.style.display = 'flex';
+
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/learning/leaderboard/details?machine_id=${encodeURIComponent(machineId)}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+
+        document.getElementById('lbDetailTitle').textContent =
+            `${data.display_name || data.machine_name || machineId} — ${(data.total_points || 0).toLocaleString()} pts`;
+
+        const earned = data.earned || [];
+        const locked = data.locked || [];
+
+        const earnedHtml = earned.length
+            ? earned.map(b => renderBadgeCard(b, true)).join('')
+            : '<div class="lb-detail-empty">No badges earned yet — keep using Claude Code and check back!</div>';
+
+        const lockedHtml = locked.length
+            ? locked.map(b => renderBadgeCard(b, false)).join('')
+            : '<div class="lb-detail-empty">All available badges have been earned. 🎉</div>';
+
+        body.innerHTML = `
+            <div class="lb-detail-section">
+                <h4>Earned (${earned.length})</h4>
+                ${earnedHtml}
+            </div>
+            <div class="lb-detail-section">
+                <h4>Locked — in progress (${locked.length})</h4>
+                ${lockedHtml}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Failed to load badge details:', error);
+        body.innerHTML = '<div class="lb-detail-empty">Failed to load badge details.</div>';
+    }
+}
+
+function closeBadgeDetails() {
+    document.getElementById('lbDetailModal').style.display = 'none';
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeBadgeDetails();
+});
+
+// setLeaderboardSort/openBadgeDetails/closeBadgeDetails are invoked from
+// inline onclick="" markup above, which runs in global scope - plain
+// function declarations inside this IIFE aren't visible there, so they
+// must be attached to window.
+window.setLeaderboardSort = setLeaderboardSort;
+window.openBadgeDetails = openBadgeDetails;
+window.closeBadgeDetails = closeBadgeDetails;
+
+loadLeaderboard();
+})();
+</script>
+{% endblock %}

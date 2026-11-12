@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected_machine %}Sessions for {{ selected_machine.display_name }}{% else %}All Sessions{% endif %} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Sessions for <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    <p class="subtitle">
+        Claude Code sessions
+        {% if selected_machine.machine_name %}<span class="machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</span>{% endif %}
+    </p>
+    {% else %}
+    <h2>All Sessions</h2>
+    <p class="subtitle">Browse all Claude Code sessions and view conversation history</p>
+    {% endif %}
+</div>
+
+<div class="stats-summary">
+    <div class="summary-grid">
+        <div>
+            <strong>Total Sessions:</strong> {{ sessions|length }}
+        </div>
+        <div>
+            <strong>Total Cost:</strong> <span class="cost-highlight">${{ "%.2f"|format(total_cost) }}</span>
+        </div>
+    </div>
+</div>
+
+<section class="section">
+    <!-- Filter bar -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <label for="filterSearch">🔍 Search</label>
+            <input type="text" id="filterSearch" placeholder="Session ID, directory…" oninput="applyFilters()">
+        </div>
+        <div class="filter-group">
+            <label for="filterUser">User</label>
+            <select id="filterUser" onchange="applyFilters()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterMachine">Machine</label>
+            <select id="filterMachine" onchange="applyFilters()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterStatus">Status</label>
+            <select id="filterStatus" onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="completed">Completed</option>
+                <option value="active">Active</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterModel">Model</label>
+            <select id="filterModel" onchange="applyFilters()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterDir">Directory</label>
+            <select id="filterDir" onchange="applyFilters()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterTag">Tag</label>
+            <select id="filterTag" onchange="applyFilters()">
+                <option value="">All</option>
+                {% for t in all_tags %}
+                <option value="{{ t.name }}">{{ t.name }} ({{ t.session_count }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group filter-actions">
+            <button class="btn-clear" onclick="clearFilters()">✕ Clear</button>
+            <span id="filterCount" class="filter-count"></span>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table id="sessionsTable">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Machine</th>
+                    <th class="sortable" data-col="2" onclick="sortTable(2)">Started <span class="sort-icon">⇅</span></th>
+                    <th class="sortable" data-col="3" onclick="sortTable(3)">Duration <span class="sort-icon">⇅</span></th>
+                    <th class="sortable" data-col="4" onclick="sortTable(4)">Cost <span class="sort-icon">⇅</span></th>
+                    <th>Working Directory</th>
+                    <th>Model</th>
+                    <th>Tags</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in sessions %}
+                <tr data-session-id="{{ session.session_id }}"
+                    data-status="{{ 'completed' if session.end_time else 'active' }}"
+                    data-model="{{ session.model_name or 'Unknown' }}"
+                    data-dir="{{ session.working_directory or '' }}"
+                    data-cost="{{ session.cost }}"
+                    data-duration="{{ session.duration_seconds or 0 }}"
+                    data-start="{{ session.start_time }}"
+                    data-user="{{ session.logged_in_user or '' }}"
+                    data-machine="{{ session.machine_name or session.machine_id or '' }}"
+                    data-tags="{{ session.tags|map(attribute='name')|join(',') }}">
+                    <td>
+                        {% if session.logged_in_user %}
+                            <span class="user-tag">👤 {{ session.logged_in_user.split('<')[0].strip() }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="machine-tag">{{ session.machine_name or session.machine_id or '—' }}</span>
+                    </td>
+                    <td data-utc="{{ session.start_time }}">{{ session.start_time[:19] }}</td>
+                    <td>
+                        {% if session.duration_seconds %}
+                            {{ (session.duration_seconds // 60)|int }} min
+                        {% else %}
+                            <span class="status-active"><i class="material-icons status-icon">play_circle</i></span>
+                        {% endif %}
+                    </td>
+                    <td class="cost-cell">${{ "%.2f"|format(session.cost) }}</td>
+                    <td><code class="small-code">{{ session.working_directory|default('', true)|truncate(50) }}</code></td>
+                    <td>{{ session.model_name or 'Unknown' }}</td>
+                    <td class="tags-cell">
+                        {% for t in session.tags %}
+                        <span class="tag-chip" style="background:{{ t.color }}22;color:{{ t.color }};border-color:{{ t.color }}55">{{ t.name }}</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if session.end_time %}
+                            <span class="status-completed"><i class="material-icons status-icon" title="Completed">check_circle</i></span>
+                        {% else %}
+                            <span class="status-active"><i class="material-icons status-icon" title="Active">play_circle</i></span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ request.state.root_path }}/session/{{ session.session_id }}" class="btn-small">View Details</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 3rem; color: #6b7280;">
+                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">No sessions found</div>
+                        {% if selected_machine %}
+                        <div style="font-size: 0.9rem;">
+                            <strong>{{ selected_machine.machine_name }}</strong> hasn't run any Claude Code sessions yet.
+                        </div>
+                        {% else %}
+                        <div style="font-size: 0.9rem;">No Claude Code sessions recorded.</div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<style>
+.stats-summary {
+    margin: 1rem 0 2rem 0;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.summary-grid {
+    display: flex;
+    gap: 3rem;
+    align-items: center;
+}
+
+.summary-grid > div {
+    color: #374151;
+}
+
+.cost-highlight {
+    color: #059669;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.cost-cell {
+    color: #059669;
+    font-weight: 600;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.status-completed {
+    color: #6b7280;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.status-completed .status-icon {
+    font-size: 1rem;
+    color: #10b981;
+}
+
+.status-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.status-active .status-icon {
+    font-size: 1rem;
+    color: #6366f1;
+}
+
+.small-code {
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+
+.btn-small {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    background: #6366f1;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.2s;
+    display: inline-block;
+}
+
+.btn-small:hover {
+    background: #4f46e5;
+}
+
+.subtitle {
+    color: #6b7280;
+    margin-top: 0.5rem;
+}
+
+/* Filter bar */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+    padding: 1rem 1.25rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.filter-group label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.filter-group input,
+.filter-group select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+    color: #1e293b;
+    min-width: 140px;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.filter-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+}
+
+.btn-clear {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: white;
+    color: #64748b;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-clear:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.filter-count {
+    font-size: 0.8rem;
+    color: #6366f1;
+    font-weight: 600;
+}
+
+/* Sortable headers */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.sortable:hover {
+    background: #eef2ff;
+}
+
+.sort-icon {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-left: 0.25rem;
+}
+
+.sort-icon.asc::after { content: '▲'; }
+.sort-icon.desc::after { content: '▼'; }
+
+.tags-cell {
+    white-space: nowrap;
+    max-width: 160px;
+}
+
+.tag-chip {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid;
+    margin: 0 0.2rem 0.2rem 0;
+    text-transform: capitalize;
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Populate filter dropdowns from table data
+(function populateDropdowns() {
+    const rows = document.querySelectorAll('#sessionsTable tbody tr[data-session-id]');
+    const models = new Set();
+    const dirs = new Set();
+    const users = new Set();
+    const machines = new Set();
+
+    rows.forEach(row => {
+        const model = row.dataset.model;
+        const dir = row.dataset.dir;
+        const user = row.dataset.user;
+        const machine = row.dataset.machine;
+        if (model && model !== 'Unknown') models.add(model);
+        if (user) {
+            const shortName = user.split('<')[0].trim();
+            users.add(shortName + '||' + user);
+        }
+        if (machine) machines.add(machine);
+        if (dir) {
+            const parts = dir.replace(/\\/g, '/').split('/');
+            const leaf = parts.slice(-2).join('/');
+            dirs.add(leaf + '||' + dir);
+        }
+    });
+
+    const userSelect = document.getElementById('filterUser');
+    [...users].sort().forEach(u => {
+        const [label, full] = u.split('||');
+        const opt = document.createElement('option');
+        opt.value = full;
+        opt.textContent = label;
+        userSelect.appendChild(opt);
+    });
+
+    const machineSelect = document.getElementById('filterMachine');
+    [...machines].sort().forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        machineSelect.appendChild(opt);
+    });
+
+    const modelSelect = document.getElementById('filterModel');
+    [...models].sort().forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        modelSelect.appendChild(opt);
+    });
+
+    const dirSelect = document.getElementById('filterDir');
+    [...dirs].sort().forEach(d => {
+        const [label, full] = d.split('||');
+        const opt = document.createElement('option');
+        opt.value = full;
+        opt.textContent = label;
+        dirSelect.appendChild(opt);
+    });
+})();
+
+function applyFilters() {
+    const search = document.getElementById('filterSearch').value.toLowerCase();
+    const user = document.getElementById('filterUser').value;
+    const machine = document.getElementById('filterMachine').value;
+    const status = document.getElementById('filterStatus').value;
+    const model = document.getElementById('filterModel').value;
+    const dir = document.getElementById('filterDir').value;
+    const tag = document.getElementById('filterTag').value;
+
+    const rows = document.querySelectorAll('#sessionsTable tbody tr[data-session-id]');
+    let visible = 0;
+
+    rows.forEach(row => {
+        let show = true;
+
+        if (search) {
+            const text = row.textContent.toLowerCase();
+            show = show && text.includes(search);
+        }
+        if (user) {
+            show = show && row.dataset.user === user;
+        }
+        if (machine) {
+            show = show && row.dataset.machine === machine;
+        }
+        if (status) {
+            show = show && row.dataset.status === status;
+        }
+        if (model) {
+            show = show && row.dataset.model === model;
+        }
+        if (dir) {
+            show = show && row.dataset.dir.toLowerCase() === dir.toLowerCase();
+        }
+        if (tag) {
+            show = show && (row.dataset.tags || '').split(',').includes(tag);
+        }
+
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    const total = rows.length;
+    const countEl = document.getElementById('filterCount');
+    if (search || user || machine || status || model || dir || tag) {
+        countEl.textContent = `${visible} / ${total}`;
+    } else {
+        countEl.textContent = '';
+    }
+}
+
+function clearFilters() {
+    document.getElementById('filterSearch').value = '';
+    document.getElementById('filterUser').value = '';
+    document.getElementById('filterMachine').value = '';
+    document.getElementById('filterStatus').value = '';
+    document.getElementById('filterModel').value = '';
+    document.getElementById('filterDir').value = '';
+    document.getElementById('filterTag').value = '';
+    applyFilters();
+}
+
+// Column sorting
+let sortCol = -1, sortAsc = true;
+
+function sortTable(colIdx) {
+    const table = document.getElementById('sessionsTable');
+    const tbody = table.querySelector('tbody');
+    const rows = [...tbody.querySelectorAll('tr[data-session-id]')];
+
+    if (sortCol === colIdx) {
+        sortAsc = !sortAsc;
+    } else {
+        sortCol = colIdx;
+        sortAsc = true;
+    }
+
+    // Update sort icons
+    table.querySelectorAll('.sort-icon').forEach(el => {
+        el.className = 'sort-icon';
+        el.textContent = '⇅';
+    });
+    const activeIcon = table.querySelectorAll('.sortable')[
+        [...table.querySelectorAll('.sortable')].findIndex(th => parseInt(th.dataset.col) === colIdx)
+    ]?.querySelector('.sort-icon');
+    if (activeIcon) {
+        activeIcon.textContent = sortAsc ? '▲' : '▼';
+        activeIcon.className = 'sort-icon ' + (sortAsc ? 'asc' : 'desc');
+    }
+
+    rows.sort((a, b) => {
+        let va, vb;
+        // Column indices here must match the actual <th data-col> values
+        // (2=Started, 3=Duration, 4=Cost) — the table has User/Machine
+        // columns before them, so these are NOT 0-based from the sortable
+        // columns themselves.
+        switch (colIdx) {
+            case 2: // Started
+                va = a.dataset.start;
+                vb = b.dataset.start;
+                break;
+            case 3: // Duration
+                va = parseFloat(a.dataset.duration) || 0;
+                vb = parseFloat(b.dataset.duration) || 0;
+                return sortAsc ? va - vb : vb - va;
+            case 4: // Cost
+                va = parseFloat(a.dataset.cost) || 0;
+                vb = parseFloat(b.dataset.cost) || 0;
+                return sortAsc ? va - vb : vb - va;
+            default:
+                va = a.cells[colIdx]?.textContent.trim() || '';
+                vb = b.cells[colIdx]?.textContent.trim() || '';
+        }
+        if (typeof va === 'string') {
+            return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        return sortAsc ? va - vb : vb - va;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.local.claude.git-metrics</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>VENV_PATH/bin/python3</string>
+        <string>INSTALL_PATH/scripts/collect_git_metrics.py</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>LOG_PATH/git-metrics.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>LOG_PATH/git-metrics.err</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

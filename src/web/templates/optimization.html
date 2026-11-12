@@ -1,0 +1,1019 @@
+{% extends "base.html" %}
+
+{% block title %}AI Usage Optimization - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>AI Usage Optimization for <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>AI Usage Optimization</h2>
+    <p class="page-subtitle">Optimize your AI usage with smart prompting, caching insights, and token efficiency analysis</p>
+    {% endif %}
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">⭐</div>
+        <div class="stat-content">
+            <h3 id="avgPromptQuality">-</h3>
+            <p>Avg Prompt Quality</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-content">
+            <h3 id="cacheSavings">-</h3>
+            <p>Cache Savings (USD)</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-content">
+            <h3 id="cacheHitRate">-</h3>
+            <p>Cache Hit Rate</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">⚠️</div>
+        <div class="stat-content">
+            <h3 id="tokenWaste">-</h3>
+            <p>Token Waste</p>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('prompts')">Prompt Analysis</button>
+    <button class="tab-btn" onclick="switchTab('context')">Context Optimization</button>
+    <button class="tab-btn" onclick="switchTab('cache')">Cache Analytics</button>
+    <button class="tab-btn" onclick="switchTab('models')">Model Performance</button>
+    <button class="tab-btn" onclick="switchTab('waste')">Token Waste</button>
+</div>
+
+<!-- Prompt Analysis Tab -->
+<div id="promptsTab" class="tab-content active">
+    <div class="section-header">
+        <h3>Prompt Quality Analysis</h3>
+        <div class="filters">
+            <select id="qualityFilter" onchange="filterPrompts()">
+                <option value="">All Quality Levels</option>
+                <option value="high">High Quality (80+)</option>
+                <option value="medium">Medium Quality (60-80)</option>
+                <option value="low">Low Quality (<60)</option>
+            </select>
+        </div>
+    </div>
+    <div id="promptsList" class="content-list">
+        <div class="loading">Loading prompt analyses...</div>
+    </div>
+</div>
+
+<!-- Context Optimization Tab -->
+<div id="contextTab" class="tab-content">
+    <div class="section-header">
+        <h3>Context Optimization Insights</h3>
+        <p class="section-subtitle">Identify and eliminate redundant context to reduce token usage</p>
+    </div>
+    <div id="contextChart" style="max-width: 600px; margin: 2rem auto;">
+        <canvas id="contextWasteChart"></canvas>
+    </div>
+    <div id="contextList" class="content-list">
+        <div class="loading">Loading context insights...</div>
+    </div>
+</div>
+
+<!-- Cache Analytics Tab -->
+<div id="cacheTab" class="tab-content">
+    <div class="section-header">
+        <h3>Cache Performance Analytics</h3>
+        <p class="section-subtitle">Monitor cache effectiveness and cost savings</p>
+    </div>
+    <div id="cacheChart" style="max-width: 800px; margin: 2rem auto;">
+        <canvas id="cacheEfficiencyChart"></canvas>
+    </div>
+    <div id="cacheList" class="content-list">
+        <div class="loading">Loading cache analytics...</div>
+    </div>
+</div>
+
+<!-- Model Performance Tab -->
+<div id="modelsTab" class="tab-content">
+    <div class="section-header">
+        <h3>Model Performance Comparison</h3>
+        <div class="filters">
+            <select id="taskTypeFilter" onchange="filterModels()">
+                <option value="">All Task Types</option>
+                <option value="code_generation">Code Generation</option>
+                <option value="debugging">Debugging</option>
+                <option value="refactoring">Refactoring</option>
+                <option value="documentation">Documentation</option>
+            </select>
+        </div>
+    </div>
+    <div id="modelsChart" style="max-width: 900px; margin: 2rem auto;">
+        <canvas id="modelComparisonChart"></canvas>
+    </div>
+    <div id="modelsList" class="content-list">
+        <div class="loading">Loading model performance data...</div>
+    </div>
+</div>
+
+<!-- Token Waste Patterns Tab -->
+<div id="wasteTab" class="tab-content">
+    <div class="section-header">
+        <h3>Token Waste Patterns</h3>
+        <p class="section-subtitle">Identify patterns where tokens are wasted inefficiently</p>
+    </div>
+    <div id="wasteChart" style="max-width: 700px; margin: 2rem auto;">
+        <canvas id="wastePatternsChart"></canvas>
+    </div>
+    <div id="wasteList" class="content-list">
+        <div class="loading">Loading waste patterns...</div>
+    </div>
+</div>
+
+<style>
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-top: 0.5rem;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.section-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.filters {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.filters select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.content-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.prompt-card, .context-card, .cache-card, .model-card, .waste-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: all 0.2s;
+}
+
+.prompt-card:hover, .context-card:hover, .cache-card:hover, .model-card:hover, .waste-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.quality-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.quality-high {
+    background: #10b98114;
+    color: #10b981;
+}
+
+.quality-medium {
+    background: #f59e0b14;
+    color: #f59e0b;
+}
+
+.quality-low {
+    background: #ef444414;
+    color: #ef4444;
+}
+
+.metric-row {
+    display: flex;
+    gap: 2rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+}
+
+.metric {
+    flex: 1;
+    min-width: 120px;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.suggestion-box {
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.suggestion-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.suggestion-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.prompt-text {
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 0.75rem 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.progress-bar {
+    height: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    position: relative;
+    margin-top: 0.5rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+}
+
+.progress-text {
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.waste-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #ef444414;
+    color: #ef4444;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.savings-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #10b98114;
+    color: #10b981;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 0.5rem;
+}
+
+.stat-item-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-item-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.recommendation-box {
+    background: #6366f114;
+    border-left: 4px solid var(--primary-color);
+    padding: 1rem;
+    margin-top: 1rem;
+    border-radius: 0.25rem;
+}
+
+.recommendation-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.recommendation-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+</style>
+
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+let currentTab = 'prompts';
+let allPrompts = [];
+let allModels = [];
+
+// Revisiting a tab re-runs its render* function, so each chart needs its
+// own instance tracked here — Chart.js throws "Canvas is already in use"
+// if a new Chart is created on a canvas without destroying the prior one.
+let contextWasteChartInstance = null;
+let cacheEfficiencyChartInstance = null;
+let modelComparisonChartInstance = null;
+let wastePatternsChartInstance = null;
+
+const urlParams = new URLSearchParams(window.location.search);
+
+// Filter session-scoped API calls to the currently selected machine (mirrors usage.html/insights.html)
+const _machineParam = urlParams.get('machine_id');
+const _mq = (_machineParam && _machineParam !== 'all') ? `&machine_id=${_machineParam}` : '';
+
+function switchTab(tabName) {
+    currentTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(tabName + 'Tab').classList.add('active');
+
+    // Load data for the tab
+    loadTabData(tabName);
+}
+
+async function loadTabData(tabName) {
+    switch(tabName) {
+        case 'prompts':
+            await loadPromptAnalysis();
+            break;
+        case 'context':
+            await loadContextInsights();
+            break;
+        case 'cache':
+            await loadCacheAnalytics();
+            break;
+        case 'models':
+            await loadModelPerformance();
+            break;
+        case 'waste':
+            await loadTokenWaste();
+            break;
+    }
+}
+
+async function loadSummary() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/optimization/summary?days=30${_mq}`);
+        const data = await response.json();
+
+        document.getElementById('avgPromptQuality').textContent = data.avg_prompt_quality.toFixed(1) + '/100';
+        document.getElementById('cacheSavings').textContent = '$' + data.total_cache_savings.toFixed(2);
+        document.getElementById('cacheHitRate').textContent = data.avg_cache_hit_rate.toFixed(1) + '%';
+        document.getElementById('tokenWaste').textContent = (data.total_waste_tokens / 1000).toFixed(1) + 'K';
+    } catch (error) {
+        console.error('Failed to load summary:', error);
+    }
+}
+
+async function loadPromptAnalysis() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/optimization/prompt-analysis?limit=50${_mq}`);
+        allPrompts = await response.json();
+        displayPrompts(allPrompts);
+    } catch (error) {
+        console.error('Failed to load prompt analysis:', error);
+        document.getElementById('promptsList').innerHTML = '<div class="error">Failed to load prompt analyses</div>';
+    }
+}
+
+function displayPrompts(prompts) {
+    const container = document.getElementById('promptsList');
+    if (!prompts.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No prompt analyses found</p>';
+        return;
+    }
+
+    container.innerHTML = prompts.map(prompt => {
+        const quality = prompt.quality_score || 0;
+        const qualityClass = quality >= 80 ? 'quality-high' : quality >= 60 ? 'quality-medium' : 'quality-low';
+        const qualityLabel = quality >= 80 ? 'High Quality' : quality >= 60 ? 'Medium Quality' : 'Needs Improvement';
+
+        return `
+            <div class="prompt-card">
+                <div class="card-header">
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                            Session: ${escapeHtml(prompt.session_id.substring(0, 12))}...
+                        </div>
+                    </div>
+                    <span class="quality-badge ${qualityClass}">${qualityLabel} (${escapeHtml(quality)}/100)</span>
+                </div>
+
+                <div class="metric-row">
+                    <div class="metric">
+                        <div class="metric-label">Clarity</div>
+                        <div class="metric-value">${(prompt.clarity_score || 0).toFixed(0)}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Specificity</div>
+                        <div class="metric-value">${(prompt.specificity_score || 0).toFixed(0)}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Context Efficiency</div>
+                        <div class="metric-value">${(prompt.context_efficiency_score || 0).toFixed(0)}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Token Efficiency</div>
+                        <div class="metric-value">${(prompt.token_efficiency || 0).toFixed(1)}%</div>
+                    </div>
+                </div>
+
+                ${prompt.prompt_text ? `
+                    <div>
+                        <strong style="font-size: 0.875rem;">Original Prompt:</strong>
+                        <div class="prompt-text">${escapeHtml(prompt.prompt_text.substring(0, 200))}${prompt.prompt_text.length > 200 ? '...' : ''}</div>
+                    </div>
+                ` : ''}
+
+                ${prompt.suggestions ? `
+                    <div class="suggestion-box">
+                        <div class="suggestion-title">💡 Suggestions for Improvement</div>
+                        <div class="suggestion-text">${escapeHtml(prompt.suggestions)}</div>
+                    </div>
+                ` : ''}
+
+                ${prompt.improved_prompt ? `
+                    <div class="suggestion-box" style="background: #10b98114; border-color: #10b981;">
+                        <div class="suggestion-title" style="color: #10b981;">✨ Improved Prompt</div>
+                        <div class="prompt-text" style="background: white;">${escapeHtml(prompt.improved_prompt.substring(0, 200))}${prompt.improved_prompt.length > 200 ? '...' : ''}</div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function filterPrompts() {
+    const quality = document.getElementById('qualityFilter').value;
+
+    const filtered = allPrompts.filter(p => {
+        const score = p.quality_score || 0;
+        if (quality === 'high' && score < 80) return false;
+        if (quality === 'medium' && (score < 60 || score >= 80)) return false;
+        if (quality === 'low' && score >= 60) return false;
+        return true;
+    });
+
+    displayPrompts(filtered);
+}
+
+async function loadContextInsights() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/optimization/context-insights?days=30${_mq}`);
+        const insights = await response.json();
+        displayContextInsights(insights);
+        renderContextChart(insights);
+    } catch (error) {
+        console.error('Failed to load context insights:', error);
+        document.getElementById('contextList').innerHTML = '<div class="error">Failed to load context insights</div>';
+    }
+}
+
+function displayContextInsights(insights) {
+    const container = document.getElementById('contextList');
+    if (!insights.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No context insights found</p>';
+        return;
+    }
+
+    container.innerHTML = insights.map(insight => `
+        <div class="context-card">
+            <div class="card-header">
+                <div class="card-title">Session: ${escapeHtml(insight.session_id.substring(0, 12))}...</div>
+                <span class="waste-indicator">
+                    ⚠️ ${(insight.waste_percentage || 0).toFixed(1)}% Waste
+                </span>
+            </div>
+
+            <div class="metric-row">
+                <div class="metric">
+                    <div class="metric-label">Total Context</div>
+                    <div class="metric-value">${escapeHtml((insight.total_context_tokens || 0).toLocaleString())}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Unique</div>
+                    <div class="metric-value">${escapeHtml((insight.unique_context_tokens || 0).toLocaleString())}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Redundant</div>
+                    <div class="metric-value" style="color: #ef4444;">${escapeHtml((insight.redundant_tokens || 0).toLocaleString())}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Optimal</div>
+                    <div class="metric-value" style="color: #10b981;">${escapeHtml((insight.optimal_tokens || 0).toLocaleString())}</div>
+                </div>
+            </div>
+
+            ${insight.estimated_cost_savings ? `
+                <div class="savings-indicator" style="margin-top: 1rem;">
+                    💰 Potential Savings: $${insight.estimated_cost_savings.toFixed(2)}
+                </div>
+            ` : ''}
+
+            ${insight.recommendations ? `
+                <div class="recommendation-box">
+                    <div class="recommendation-title">🎯 Recommendations</div>
+                    <div class="recommendation-text">${escapeHtml(insight.recommendations)}</div>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function renderContextChart(insights) {
+    if (!insights.length) return;
+
+    const ctx = document.getElementById('contextWasteChart').getContext('2d');
+    const recent = insights.slice(0, 10).reverse();
+
+    if (contextWasteChartInstance) {
+        contextWasteChartInstance.destroy();
+    }
+    contextWasteChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: recent.map((_, i) => `Session ${i + 1}`),
+            datasets: [
+                {
+                    label: 'Unique Tokens',
+                    data: recent.map(i => i.unique_context_tokens || 0),
+                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                },
+                {
+                    label: 'Redundant Tokens',
+                    data: recent.map(i => i.redundant_tokens || 0),
+                    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, beginAtZero: true }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Context Token Distribution (Recent Sessions)'
+                }
+            }
+        }
+    });
+}
+
+async function loadCacheAnalytics() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/optimization/cache-analytics?days=30${_mq}`);
+        const analytics = await response.json();
+        displayCacheAnalytics(analytics);
+        renderCacheChart(analytics);
+    } catch (error) {
+        console.error('Failed to load cache analytics:', error);
+        document.getElementById('cacheList').innerHTML = '<div class="error">Failed to load cache analytics</div>';
+    }
+}
+
+function displayCacheAnalytics(analytics) {
+    const container = document.getElementById('cacheList');
+    if (!analytics.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No cache analytics found</p>';
+        return;
+    }
+
+    container.innerHTML = analytics.map(cache => `
+        <div class="cache-card">
+            <div class="card-header">
+                <div class="card-title">Session: ${escapeHtml(cache.session_id.substring(0, 12))}...</div>
+                <span class="quality-badge quality-high">
+                    ${(cache.cache_hit_rate || 0).toFixed(1)}% Hit Rate
+                </span>
+            </div>
+
+            <div class="metric-row">
+                <div class="metric">
+                    <div class="metric-label">Cache Reads</div>
+                    <div class="metric-value">${escapeHtml((cache.cache_read_tokens || 0).toLocaleString())}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cache Writes</div>
+                    <div class="metric-value">${escapeHtml((cache.cache_write_tokens || 0).toLocaleString())}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Efficiency Score</div>
+                    <div class="metric-value">${(cache.cache_efficiency_score || 0).toFixed(0)}/100</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cost Saved</div>
+                    <div class="metric-value" style="color: #10b981;">$${(cache.cost_saved_usd || 0).toFixed(2)}</div>
+                </div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${Number(cache.cache_efficiency_score || 0)}%">
+                    <span class="progress-text">Efficiency: ${(cache.cache_efficiency_score || 0).toFixed(0)}%</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderCacheChart(analytics) {
+    if (!analytics.length) return;
+
+    const ctx = document.getElementById('cacheEfficiencyChart').getContext('2d');
+    const recent = analytics.slice(0, 15).reverse();
+
+    if (cacheEfficiencyChartInstance) {
+        cacheEfficiencyChartInstance.destroy();
+    }
+    cacheEfficiencyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: recent.map((_, i) => `S${i + 1}`),
+            datasets: [
+                {
+                    label: 'Cache Hit Rate (%)',
+                    data: recent.map(a => a.cache_hit_rate || 0),
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Efficiency Score',
+                    data: recent.map(a => a.cache_efficiency_score || 0),
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Cache Performance Trend'
+                }
+            }
+        }
+    });
+}
+
+async function loadModelPerformance() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/optimization/model-performance?days=30${_mq}`);
+        allModels = await response.json();
+        displayModels(allModels);
+        renderModelChart(allModels);
+    } catch (error) {
+        console.error('Failed to load model performance:', error);
+        document.getElementById('modelsList').innerHTML = '<div class="error">Failed to load model performance data</div>';
+    }
+}
+
+function displayModels(models) {
+    const container = document.getElementById('modelsList');
+    if (!models.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No model performance data found</p>';
+        return;
+    }
+
+    container.innerHTML = models.map(model => `
+        <div class="model-card">
+            <div class="card-header">
+                <div class="card-title">${escapeHtml(model.model_name || 'Unknown Model')}</div>
+                <span class="quality-badge quality-medium">${escapeHtml(model.task_type || 'General')}</span>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-item-value">${(model.avg_quality_score || 0).toFixed(1)}</div>
+                    <div class="stat-item-label">Quality Score</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-item-value">${(model.avg_latency_ms || 0).toFixed(0)}ms</div>
+                    <div class="stat-item-label">Avg Latency</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-item-value">${(model.success_rate || 0).toFixed(1)}%</div>
+                    <div class="stat-item-label">Success Rate</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-item-value">$${(model.avg_cost_per_request || 0).toFixed(2)}</div>
+                    <div class="stat-item-label">Cost/Request</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderModelChart(models) {
+    if (!models.length) return;
+
+    const ctx = document.getElementById('modelComparisonChart').getContext('2d');
+
+    if (modelComparisonChartInstance) {
+        modelComparisonChartInstance.destroy();
+    }
+    modelComparisonChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: models.map(m => m.model_name || 'Unknown'),
+            datasets: [
+                {
+                    label: 'Quality Score',
+                    data: models.map(m => m.avg_quality_score || 0),
+                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                },
+                {
+                    label: 'Success Rate',
+                    data: models.map(m => m.success_rate || 0),
+                    backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Model Quality & Success Rate Comparison'
+                }
+            }
+        }
+    });
+}
+
+function filterModels() {
+    const taskType = document.getElementById('taskTypeFilter').value;
+
+    const filtered = allModels.filter(m => {
+        if (taskType && m.task_type !== taskType) return false;
+        return true;
+    });
+
+    displayModels(filtered);
+}
+
+async function loadTokenWaste() {
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/optimization/token-waste?days=30${_mq}`);
+        const patterns = await response.json();
+        displayWastePatterns(patterns);
+        renderWasteChart(patterns);
+    } catch (error) {
+        console.error('Failed to load token waste:', error);
+        document.getElementById('wasteList').innerHTML = '<div class="error">Failed to load waste patterns</div>';
+    }
+}
+
+function displayWastePatterns(patterns) {
+    const container = document.getElementById('wasteList');
+    if (!patterns.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No waste patterns detected</p>';
+        return;
+    }
+
+    container.innerHTML = patterns.map(pattern => `
+        <div class="waste-card">
+            <div class="card-header">
+                <div class="card-title">${escapeHtml(pattern.pattern_type || 'Unknown Pattern')}</div>
+                <span class="waste-indicator">
+                    ${escapeHtml((pattern.total_wasted_tokens || 0).toLocaleString())} tokens
+                </span>
+            </div>
+
+            ${pattern.description ? `
+                <p style="color: var(--text-secondary); margin: 0.75rem 0;">${escapeHtml(pattern.description)}</p>
+            ` : ''}
+
+            <div class="metric-row">
+                <div class="metric">
+                    <div class="metric-label">Occurrences</div>
+                    <div class="metric-value">${escapeHtml(pattern.occurrence_count || 0)}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Avg Waste/Occurrence</div>
+                    <div class="metric-value">${Math.round((pattern.total_wasted_tokens || 0) / Math.max(pattern.occurrence_count || 1, 1))}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Est. Cost Impact</div>
+                    <div class="metric-value" style="color: #ef4444;">$${(pattern.estimated_cost_impact || 0).toFixed(2)}</div>
+                </div>
+            </div>
+
+            ${pattern.recommendation ? `
+                <div class="recommendation-box">
+                    <div class="recommendation-title">💡 How to Fix</div>
+                    <div class="recommendation-text">${escapeHtml(pattern.recommendation)}</div>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function renderWasteChart(patterns) {
+    if (!patterns.length) return;
+
+    const ctx = document.getElementById('wastePatternsChart').getContext('2d');
+    const top = patterns.slice(0, 8);
+
+    if (wastePatternsChartInstance) {
+        wastePatternsChartInstance.destroy();
+    }
+    wastePatternsChartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: top.map(p => p.pattern_type || 'Unknown'),
+            datasets: [{
+                data: top.map(p => p.total_wasted_tokens || 0),
+                backgroundColor: [
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(251, 191, 36, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(6, 182, 212, 0.8)',
+                    'rgba(99, 102, 241, 0.8)',
+                    'rgba(139, 92, 246, 0.8)',
+                    'rgba(236, 72, 153, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Token Waste by Pattern Type'
+                },
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', () => {
+    loadSummary();
+    loadPromptAnalysis();
+});
+
+// Expose functions used by inline HTML event handlers
+window.switchTab = switchTab;
+window.filterPrompts = filterPrompts;
+window.filterModels = filterModels;
+})();
+</script>
+{% endblock %}

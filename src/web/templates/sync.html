@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected_machine %}Sync — {{ selected_machine.display_name }}{% else %}Sync{% endif %} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Sync — <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Sync</h2>
+    <p>Client-agent sync history — items found &amp; synced on each request</p>
+    {% endif %}
+</div>
+
+<section class="section">
+    <h3>Recent Sync Requests</h3>
+    <div class="table-container">
+        <table id="syncLogTable">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Machine</th>
+                    <th>Source</th>
+                    <th>Items Synced</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody id="syncLogBody">
+                {% for entry in sync_log %}
+                <tr>
+                    <td class="sync-time" data-utc="{{ entry.synced_at or '' }}">{{ entry.synced_at[:19] if entry.synced_at else 'N/A' }}</td>
+                    <td>
+                        {% if entry.logged_in_user %}
+                        <span class="user-tag">👤 {{ entry.logged_in_user.split('<')[0].strip() }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="machine-tag">{{ entry.machine_name or entry.machine_id }}</span></td>
+                    <td><code>{{ entry.source or 'unknown' }}</code></td>
+                    <td>{{ entry.items_synced or 0 }} / {{ entry.items_total or 0 }}</td>
+                    <td>
+                        {% if not entry.items_total %}
+                        <span class="sync-badge sync-badge-nodata">No data</span>
+                        {% elif not entry.items_synced %}
+                        <span class="sync-badge sync-badge-uptodate">Up to date</span>
+                        {% else %}
+                        <span class="sync-badge sync-badge-synced">✓ Synced</span>
+                        {% endif %}
+                        {% if entry.items_failed %}
+                        <span class="sync-badge sync-badge-failed">{{ entry.items_failed }} failed</span>
+                        {% endif %}
+                    </td>
+                    <td class="sync-message">{{ entry.message or '' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="empty-state">No sync requests recorded yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<script>
+(function() {
+    const ROOT_PATH = "{{ request.state.root_path }}";
+    const machineId = "{{ machine_id or '' }}";
+
+    function statusBadges(entry) {
+        let badges = '';
+        if (!entry.items_total) {
+            badges += '<span class="sync-badge sync-badge-nodata">No data</span>';
+        } else if (!entry.items_synced) {
+            badges += '<span class="sync-badge sync-badge-uptodate">Up to date</span>';
+        } else {
+            badges += '<span class="sync-badge sync-badge-synced">✓ Synced</span>';
+        }
+        if (entry.items_failed) {
+            badges += ` <span class="sync-badge sync-badge-failed">${entry.items_failed} failed</span>`;
+        }
+        return badges;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : str;
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Server sends UTC timestamps (e.g. "2026-09-09T06:18:09Z"); render them
+    // in whatever local timezone the browser is in instead of raw UTC.
+    function formatLocalTime(isoString) {
+        if (!isoString) return 'N/A';
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return isoString;
+        return d.toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    }
+
+    // Convert the server-rendered rows (present on first page load, before
+    // any fetch happens) from UTC to local time too.
+    document.querySelectorAll('#syncLogBody td.sync-time[data-utc]').forEach(td => {
+        const utc = td.getAttribute('data-utc');
+        if (utc) td.textContent = formatLocalTime(utc);
+    });
+
+    async function refreshSyncLog() {
+        try {
+            const url = machineId
+                ? `${ROOT_PATH}/api/sync-log?machine_id=${encodeURIComponent(machineId)}`
+                : `${ROOT_PATH}/api/sync-log`;
+            const response = await fetch(url);
+            const rows = await response.json();
+            const tbody = document.getElementById('syncLogBody');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No sync requests recorded yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(entry => `
+                <tr>
+                    <td class="sync-time" data-utc="${escapeHtml(entry.synced_at || '')}">${escapeHtml(formatLocalTime(entry.synced_at))}</td>
+                    <td>${entry.logged_in_user
+                        ? `<span class="user-tag">👤 ${escapeHtml(entry.logged_in_user.split('<')[0].trim())}</span>`
+                        : '<span class="text-muted">—</span>'}</td>
+                    <td><span class="machine-tag">${escapeHtml(entry.machine_name || entry.machine_id)}</span></td>
+                    <td><code>${escapeHtml(entry.source || 'unknown')}</code></td>
+                    <td>${entry.items_synced || 0} / ${entry.items_total || 0}</td>
+                    <td>${statusBadges(entry)}</td>
+                    <td class="sync-message">${escapeHtml(entry.message)}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to refresh sync log', e);
+        }
+    }
+
+    setInterval(refreshSyncLog, 30000);
+})();
+</script>
+{% endblock %}

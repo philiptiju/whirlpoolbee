@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Ask - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>💬 Ask WhirlpoolBee</h2>
+    <p>Ask a plain-English question about cost, tokens, sessions, or hours. Answered 100% locally — no data leaves this machine.</p>
+</div>
+
+<div class="insights-row">
+    <div class="chart-card wide">
+        <form id="askForm" onsubmit="return askQuestion(event)">
+            <div style="display:flex; gap:0.5rem;">
+                <input type="text" id="askInput" placeholder="e.g. How much did Team Alpha spend last week?"
+                       style="flex:1; padding:0.6rem 0.8rem; border-radius:8px; border:1px solid var(--border-color, #ddd); font-size:0.95rem;" />
+                <button type="submit" class="btn btn-primary">Ask</button>
+            </div>
+        </form>
+
+        <div class="example-chips" style="margin-top:0.75rem; display:flex; flex-wrap:wrap; gap:0.4rem;">
+            <span class="subtitle" style="font-size:0.8rem; width:100%;">Try:</span>
+            {% if example_team %}
+            <button type="button" class="btn btn-sm" onclick="askExample(this)">How much did Team {{ example_team }} spend last week?</button>
+            {% endif %}
+            <button type="button" class="btn btn-sm" onclick="askExample(this)">How many sessions did I have this month?</button>
+            <button type="button" class="btn btn-sm" onclick="askExample(this)">How many tokens were used yesterday?</button>
+            <button type="button" class="btn btn-sm" onclick="askExample(this)">How many hours this week?</button>
+            <button type="button" class="btn btn-sm" onclick="askExample(this)">Who is spending the most this month?</button>
+        </div>
+
+        <div id="askAnswer" style="margin-top:1.5rem;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function askExample(btn) {
+    document.getElementById('askInput').value = btn.textContent;
+    askQuestion({ preventDefault: () => {} });
+}
+
+async function askQuestion(e) {
+    e.preventDefault();
+    const q = document.getElementById('askInput').value.trim();
+    if (!q) return false;
+    const answerEl = document.getElementById('askAnswer');
+    answerEl.innerHTML = '<p class="text-muted">Thinking…</p>';
+
+    const resp = await fetch(`${ROOT_PATH}/api/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+    }).then(r => r.json());
+
+    if (!resp.matched) {
+        const examples = (resp.examples || []).map(ex => `<button type="button" class="btn btn-sm" onclick="askExample(this)" style="margin-top:0.5rem;">${escapeHtml(ex)}</button>`).join(' ');
+        answerEl.innerHTML = `<div class="alert alert-warning">🤔 ${escapeHtml(resp.reason || "Sorry, I couldn't understand that question.")}</div>
+            <div style="margin-top:0.5rem;">${examples}</div>`;
+        return false;
+    }
+
+    if (resp.no_scope_match) {
+        answerEl.innerHTML = `<div class="alert alert-warning">No matching team/user found for "${escapeHtml(resp.scope_label || '')}".</div>`;
+        return false;
+    }
+
+    const r = resp.result;
+    const fmt = (v) => r.unit === 'cost' ? `$${Number(v).toFixed(2)}` : (typeof v === 'number' ? Number(v).toLocaleString() : v);
+
+    let html = `<div class="answer-card" style="padding:1.25rem; background:var(--card-bg-alt, #f8f9fb); border-radius:10px;">`;
+
+    if (r.is_ranking && r.breakdown && r.breakdown.length) {
+        html += `<div class="subtitle" style="margin-bottom:0.75rem;">${escapeHtml(resp.scope_phrase)} — ${escapeHtml(resp.time_label)}</div>`;
+        html += '<div class="mini-table"><table><thead><tr><th>#</th><th>User</th><th>' + escapeHtml(resp.metric) + '</th></tr></thead><tbody>';
+        r.breakdown.forEach((row, i) => {
+            html += `<tr><td>${i + 1}</td><td>${escapeHtml(row.label)}</td><td>${fmt(row.value)}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    } else if (r.is_ranking) {
+        html += `<p class="text-muted">No data found for ${escapeHtml(resp.metric)} ${escapeHtml(resp.scope_phrase)} — ${escapeHtml(resp.time_label)}.</p>`;
+    } else {
+        html += `<div style="font-size:1.8rem; font-weight:700;">${fmt(r.value)}</div>
+            <div class="subtitle">${escapeHtml(resp.metric)} ${escapeHtml(resp.scope_phrase)} — ${escapeHtml(resp.time_label)}</div>`;
+        if (r.note) html += `<p class="text-muted" style="margin-top:0.5rem;">ℹ️ ${escapeHtml(r.note)}</p>`;
+    }
+    html += '</div>';
+    answerEl.innerHTML = html;
+    return false;
+}
+</script>
+{% endblock %}

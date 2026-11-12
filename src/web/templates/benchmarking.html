@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Benchmarking - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🏆 Cross-Team Benchmarking</h2>
+    <p>Compare adoption, velocity, and cost across teams and individuals</p>
+</div>
+
+<div class="insights-controls">
+    <div class="time-range-selector">
+        <button onclick="setDays(7)" class="btn btn-sm">7 Days</button>
+        <button onclick="setDays(30)" class="btn btn-sm active" id="btn30">30 Days</button>
+        <button onclick="setDays(90)" class="btn btn-sm">90 Days</button>
+    </div>
+</div>
+
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">groups</i> Team Comparison</h3>
+        <div class="kpi-mini-chart" style="height:280px"><canvas id="teamChart"></canvas></div>
+        <div id="teamTable" class="mini-table"></div>
+    </div>
+</div>
+
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">person</i> User Comparison</h3>
+        <p class="subtitle" style="font-size:0.8rem">Ranked by sessions per person. Click a column header idea: cost efficiency = output tokens per $1 spent.</p>
+        <div id="userTable" class="mini-table"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MQ = new URLSearchParams(window.location.search).get('machine_id');
+const mq = MQ ? `&machine_id=${MQ}` : '';
+let DAYS = 30;
+const charts = {};
+const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#14b8a6'];
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function setDays(d) {
+    DAYS = d;
+    document.querySelectorAll('.time-range-selector .btn-sm').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    loadAll();
+}
+
+function rankBadge(r) {
+    if (r === 1) return '🥇';
+    if (r === 2) return '🥈';
+    if (r === 3) return '🥉';
+    return `#${r}`;
+}
+
+function renderTable(elId, rows, countLabel) {
+    if (!rows.length) {
+        document.getElementById(elId).innerHTML = '<p class="text-muted">No data for this period.</p>';
+        return;
+    }
+    let html = `<table><thead><tr><th>Rank</th><th>Name</th><th>${countLabel}</th><th>Sessions</th><th>Hours</th><th>Cost</th>
+        <th>Engagement</th><th>Sessions/${countLabel === 'Members' ? 'Member' : 'Machine'}</th><th>Cost/Session</th><th>Output Tokens/$</th></tr></thead><tbody>`;
+    rows.forEach(r => {
+        html += `<tr>
+            <td>${rankBadge(r.rank)}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td>${r[countLabel === 'Members' ? 'members' : 'machines']}</td>
+            <td>${r.sessions}</td>
+            <td>${r.hours}</td>
+            <td>$${r.cost.toFixed(2)}</td>
+            <td>${r.engagement_pct}%</td>
+            <td>${r.sessions_per_member}</td>
+            <td>$${r.cost_per_session}</td>
+            <td>${r.output_per_dollar.toLocaleString()}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById(elId).innerHTML = html;
+}
+
+async function loadAll() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/benchmark?days=${DAYS}${mq}`).then(r => r.json());
+
+    destroyChart('teamChart');
+    const ctx = document.getElementById('teamChart').getContext('2d');
+    charts['teamChart'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.teams.map(t => t.name),
+            datasets: [
+                { label: 'Sessions', data: data.teams.map(t => t.sessions), backgroundColor: COLORS[0] },
+                { label: 'Cost ($)', data: data.teams.map(t => t.cost), backgroundColor: COLORS[2], yAxisID: 'y1' },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Sessions' } },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Cost ($)' } },
+            }
+        }
+    });
+
+    renderTable('teamTable', data.teams, 'Members');
+    renderTable('userTable', data.users, 'Machines');
+}
+
+loadAll();
+</script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Azure DevOps Integration - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🔗 Azure DevOps Integration</h2>
+    <p>Link Claude Code sessions to Azure Repos pull requests/commits for real "AI-assisted PR" stats</p>
+</div>
+
+{% if not ado_configured %}
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">settings</i> Not Configured Yet</h3>
+        <p>Set these environment variables on the server (never entered through this UI) and restart the app:</p>
+        <pre style="background:#1e1e2e; color:#e2e2f0; padding:1rem; border-radius:8px; overflow-x:auto;">AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-org
+AZURE_DEVOPS_PAT=&lt;personal access token with Code (Read) scope&gt;</pre>
+        <p class="text-muted">Create a PAT at <code>&lt;org-url&gt;/_usersSettings/tokens</code>. It's read via HTTP Basic auth and is never stored in the database or logged.</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">sync</i> Sync &amp; AI-Assisted PR Stats</h3>
+        <p class="subtitle" style="font-size:0.85rem">Sync pulls every project and Git repository directly from the Azure DevOps API — no manual repo setup needed. Sessions are linked to PRs by matching the session's logged-in user against commit authors within a time window. <strong>AI %</strong> is the share of a PR's commits made while that author had an active Claude Code session running — not a line-of-code diff (Azure DevOps doesn't expose that cheaply at full-org scale).</p>
+        <button class="btn btn-primary" onclick="runSync()" {% if not ado_configured %}disabled{% endif %}>Sync Now</button>
+        <span id="syncResult" class="subtitle" style="margin-left:0.75rem;"></span>
+        <div id="aiStats" class="stat-row" style="margin-top:1rem;"></div>
+
+        <div style="display:flex; align-items:center; gap:1rem; margin-top:1.25rem; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+                <input type="checkbox" id="aiOnlyToggle" onchange="resetAndLoadPRs()" />
+                Show AI-assisted PRs only
+            </label>
+            <span class="text-muted" style="font-size:0.8rem;">Showing all synced PRs by default; check this box to narrow down to only the ones with a matched Claude Code session.</span>
+        </div>
+
+        <div class="insights-controls" style="margin-top:1rem; margin-bottom:0;">
+            <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.75rem; color:var(--text-muted);">
+                Status
+                <select id="statusFilter" onchange="resetAndLoadPRs()">
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="abandoned">Abandoned</option>
+                </select>
+            </label>
+            <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.75rem; color:var(--text-muted);">
+                Project / Repo
+                <select id="projectFilter" onchange="resetAndLoadPRs()">
+                    <option value="all">All</option>
+                </select>
+            </label>
+            <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.75rem; color:var(--text-muted);">
+                Author
+                <input type="search" id="authorFilter" placeholder="Filter by author…" oninput="onAuthorFilterInput()" />
+            </label>
+        </div>
+
+        <div id="prTable" class="mini-table" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-sm" id="loadMoreBtn" onclick="loadMorePRs()" style="margin-top:0.75rem; display:none;">Load more</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PR_PAGE_SIZE = 25;
+let prOffset = 0;
+let prAccumulated = [];
+let authorFilterTimer = null;
+
+async function runSync() {
+    document.getElementById('syncResult').textContent = 'Syncing…';
+    const resp = await fetch(`${ROOT_PATH}/api/integrations/ado/sync`, { method: 'POST' }).then(r => r.json());
+    if (resp.error) {
+        document.getElementById('syncResult').textContent = `❌ ${resp.error}`;
+        return;
+    }
+    document.getElementById('syncResult').textContent =
+        `✅ Synced ${resp.prs_synced} PRs, ${resp.commits_synced} commits across ${resp.repos_synced} repos — ${resp.links_created} new session links.`;
+    loadStats();
+    loadProjects();
+    resetAndLoadPRs();
+}
+
+async function loadProjects() {
+    const sel = document.getElementById('projectFilter');
+    const previous = sel.value;
+    const resp = await fetch(`${ROOT_PATH}/api/integrations/ado/pr-projects`).then(r => r.json());
+    sel.innerHTML = '<option value="all">All</option>' +
+        resp.projects.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+    if (resp.projects.includes(previous)) sel.value = previous;
+}
+
+function onAuthorFilterInput() {
+    clearTimeout(authorFilterTimer);
+    authorFilterTimer = setTimeout(resetAndLoadPRs, 300);
+}
+
+async function loadStats() {
+    const stats = await fetch(`${ROOT_PATH}/api/integrations/ado/ai-assisted-stats?days=90`).then(r => r.json());
+    document.getElementById('aiStats').innerHTML = `
+        <div class="stat-box"><div class="val">${stats.total_prs}</div><div class="lbl">PRs (90d)</div></div>
+        <div class="stat-box"><div class="val">${stats.ai_assisted_pct}%</div><div class="lbl">AI-Assisted</div></div>
+        <div class="stat-box"><div class="val">${stats.sessions_involved}</div><div class="lbl">Sessions Involved</div></div>
+        <div class="stat-box"><div class="val">$${stats.cost_attributed}</div><div class="lbl">Cost Attributed</div></div>
+    `;
+}
+
+function renderPrTable() {
+    const el = document.getElementById('prTable');
+    if (!prAccumulated.length) {
+        const aiOnly = document.getElementById('aiOnlyToggle').checked;
+        el.innerHTML = `<p class="text-muted">${aiOnly ? 'No AI-assisted PRs found yet. Try unchecking the filter, or click Sync Now.' : 'No PRs match the current filters.'}</p>`;
+        return;
+    }
+    let html = '<table><thead><tr><th>PR</th><th>Project/Repo</th><th>Author</th><th>Status</th><th>AI %</th><th>Flag</th><th></th></tr></thead><tbody>';
+    prAccumulated.forEach(pr => {
+        const badge = pr.is_ai_assisted
+            ? `<span class="badge badge-success">🤖 AI-Assisted</span>`
+            : `<span class="text-muted" style="font-size:0.8rem;">— Manual</span>`;
+        html += `<tr><td>${pr.url ? `<a href="${pr.url}" target="_blank">#${pr.ado_pr_id}</a>` : '#' + pr.ado_pr_id} ${escapeHtml(pr.title || '')}</td>
+            <td>${escapeHtml(pr.ado_project)}/${escapeHtml(pr.ado_repository)}</td>
+            <td>${escapeHtml(pr.author || '')}</td><td>${pr.status}</td>
+            <td>${pr.is_ai_assisted ? pr.ai_commit_pct + '%' : '—'}</td>
+            <td>${badge}</td>
+            <td><button class="btn btn-sm" onclick="openPrDetails(${pr.id})">View Details</button></td></tr>`;
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+async function fetchPRs(offset) {
+    const aiOnly = document.getElementById('aiOnlyToggle').checked;
+    const status = document.getElementById('statusFilter').value;
+    const project = document.getElementById('projectFilter').value;
+    const author = document.getElementById('authorFilter').value.trim();
+    const params = new URLSearchParams({
+        limit: PR_PAGE_SIZE, offset, ai_only: aiOnly, status, project,
+    });
+    if (author) params.set('author', author);
+    const resp = await fetch(`${ROOT_PATH}/api/integrations/ado/pull-requests?${params}`).then(r => r.json());
+    return resp.pull_requests;
+}
+
+function resetAndLoadPRs() {
+    prOffset = 0;
+    prAccumulated = [];
+    loadMorePRs();
+}
+
+async function loadMorePRs() {
+    const page = await fetchPRs(prOffset);
+    prAccumulated = prAccumulated.concat(page);
+    prOffset += page.length;
+    renderPrTable();
+    document.getElementById('loadMoreBtn').style.display = page.length === PR_PAGE_SIZE ? '' : 'none';
+}
+
+loadStats();
+loadProjects();
+resetAndLoadPRs();
+</script>
+{% endblock %}

@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}Tone Analysis - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>💬 Conversation Tone</h2>
+    <p class="page-subtitle">
+        {% if request.state.is_admin %}
+        Politeness, profanity, spelling, and grammar signals across every user's prompts
+        {% else %}
+        A friendly look at the tone of your own prompts
+        {% endif %}
+    </p>
+    <p class="subtitle" style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">
+        This is meant as a lighthearted, private nudge — not a scoreboard for calling anyone out. Only your
+        own prompts are analyzed (never the assistant's replies), and results are computed on the fly.
+    </p>
+    {% if selected_machine %}
+    <p class="subtitle" style="margin-top: 0.5rem;">
+        <span class="user-badge">👤 {{ selected_machine.display_name }}</span>
+        <span style="color: var(--text-muted); font-size: 0.85rem;">— your entry is highlighted below</span>
+    </p>
+    {% endif %}
+</div>
+
+<div id="taLoading" class="loading">Loading tone analysis...</div>
+<div id="taEmpty" class="empty-state" style="display:none;">
+    <p style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem;">
+        No prompt data yet. Once you start chatting with Claude Code, your tone analysis will appear here.
+    </p>
+</div>
+
+<div id="taContent" style="display:none;">
+    <div class="card lb-list-card">
+        <h3 style="padding: 1.25rem 1.5rem 0.5rem;">Per-User Tone</h3>
+        <div class="table-responsive">
+            <table class="lb-table">
+                <thead>
+                    <tr>
+                        <th>User / Machine</th>
+                        <th>Tone</th>
+                        <th>Messages</th>
+                        <th>Politeness</th>
+                        <th>Profanity</th>
+                        <th>Spelling Errors</th>
+                        <th>Grammar Issues</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="taTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Detail drill-down modal: the actual flagged messages/words behind a
+     row's counts, fetched on demand (not preloaded for every row up front)
+     to keep the initial table load light. -->
+<div id="taDetailModal" class="ta-modal-overlay" style="display:none;" onclick="if (event.target === this) closeToneDetails()">
+    <div class="ta-modal">
+        <div class="ta-modal-header">
+            <h3 id="taDetailTitle">Details</h3>
+            <button type="button" class="ta-modal-close" onclick="closeToneDetails()" aria-label="Close">&times;</button>
+        </div>
+        <div id="taDetailBody" class="ta-modal-body">
+            <div class="loading">Loading details...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+.ta-tone-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.25rem 0.7rem;
+    border-radius: var(--border-radius-full);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.ta-rate-bar-track {
+    width: 90px;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius-full);
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 0.4rem;
+}
+.ta-rate-bar-fill { height: 100%; border-radius: var(--border-radius-full); }
+.ta-rate-bar-fill.polite { background: linear-gradient(90deg, #34d399, #10b981); }
+.ta-rate-bar-fill.profanity { background: linear-gradient(90deg, #f87171, #dc2626); }
+.ta-details-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.35rem 0.8rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.78rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+.ta-details-btn:hover { border-color: var(--primary-400); color: var(--primary-600); }
+
+/* Modal */
+.ta-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.5rem;
+}
+.ta-modal {
+    background: var(--bg-primary);
+    border-radius: var(--border-radius-lg);
+    width: 100%;
+    max-width: 720px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.ta-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.ta-modal-header h3 { margin: 0; font-size: 1.05rem; }
+.ta-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+}
+.ta-modal-close:hover { color: var(--text-primary); }
+.ta-modal-body { padding: 1rem 1.5rem 1.5rem; overflow-y: auto; }
+.ta-detail-section { margin-bottom: 1.5rem; }
+.ta-detail-section:last-child { margin-bottom: 0; }
+.ta-detail-section h4 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+}
+.ta-detail-empty { color: var(--text-muted); font-size: 0.85rem; }
+.ta-detail-item {
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+.ta-detail-item:last-child { margin-bottom: 0; }
+.ta-detail-item .ta-detail-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+.ta-detail-item .ta-detail-text {
+    color: var(--text-primary);
+    word-break: break-word;
+}
+.ta-detail-item .ta-detail-flag {
+    display: inline-block;
+    background: var(--primary-100, #e0e7ff);
+    color: var(--primary-700, #4338ca);
+    font-weight: 600;
+    padding: 0.05rem 0.4rem;
+    border-radius: var(--border-radius-full);
+    margin-right: 0.3rem;
+    font-size: 0.72rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+// See leaderboard.html for why SERVER_MACHINE_ID must take priority over
+// window.location.search: enforce_azure_ad_auth rewrites machine_id on the
+// server-side request scope for non-admins, but never touches the visible
+// browser URL.
+const SERVER_MACHINE_ID = {{ (machine_id or '') | tojson }};
+const urlParams = new URLSearchParams(window.location.search);
+const machineScope = SERVER_MACHINE_ID || urlParams.get('machine_id') || 'all';
+const myMachineId = (machineScope && machineScope !== 'all' && !machineScope.includes(',')) ? machineScope : null;
+
+const AVATAR_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#f43f5e', '#14b8a6'];
+function colorFor(id) {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+function initialsFor(entry) {
+    const name = entry.display_name || entry.machine_name || entry.machine_id || '?';
+    return name.trim().slice(0, 2).toUpperCase();
+}
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+
+async function loadToneAnalysis() {
+    try {
+        const qs = machineScope && machineScope !== 'all' ? `?machine_id=${encodeURIComponent(machineScope)}` : '';
+        const response = await fetch(`${ROOT_PATH}/api/tone/analysis${qs}`);
+        const data = await response.json();
+        const entries = data.entries || [];
+
+        document.getElementById('taLoading').style.display = 'none';
+
+        if (!entries.length) {
+            document.getElementById('taEmpty').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('taContent').style.display = 'block';
+        renderTable(entries);
+    } catch (error) {
+        console.error('Failed to load tone analysis:', error);
+        document.getElementById('taLoading').style.display = 'none';
+        document.getElementById('taEmpty').style.display = 'block';
+        document.getElementById('taEmpty').innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem;">Failed to load tone analysis data.</p>';
+    }
+}
+
+function renderTable(entries) {
+    const tbody = document.getElementById('taTableBody');
+    tbody.innerHTML = entries.map(e => {
+        const isMe = myMachineId && e.machine_id === myMachineId;
+        const politePct = Math.max(0, Math.min(100, e.politeness_rate_pct || 0));
+        const profanityPct = Math.max(0, Math.min(100, e.profanity_rate_pct || 0));
+        return `
+            <tr class="${isMe ? 'lb-you-row' : ''}">
+                <td>
+                    <div class="lb-user-cell">
+                        <div class="lb-avatar" style="background:${colorFor(e.machine_id)};">${initialsFor(e)}</div>
+                        <div>
+                            <div class="lb-user-name">${escapeHtml(e.display_name || e.machine_name)}${isMe ? '<span class="lb-you-pill">YOU</span>' : ''}</div>
+                            <div class="lb-user-sub">${escapeHtml(e.machine_name)}</div>
+                        </div>
+                    </div>
+                </td>
+                <td><span class="ta-tone-pill">${e.tone_emoji || ''} ${escapeHtml(e.tone_label || '')}</span></td>
+                <td>${e.messages_analyzed || 0}</td>
+                <td>
+                    <div class="ta-rate-bar-track"><div class="ta-rate-bar-fill polite" style="width:${politePct}%;"></div></div>
+                    <span style="font-size:0.8rem;">${politePct.toFixed(1)}%</span>
+                </td>
+                <td>
+                    <div class="ta-rate-bar-track"><div class="ta-rate-bar-fill profanity" style="width:${profanityPct}%;"></div></div>
+                    <span style="font-size:0.8rem;">${profanityPct.toFixed(1)}%</span>
+                </td>
+                <td>${e.spelling_errors || 0} <span style="color: var(--text-muted); font-size: 0.75rem;">(${(e.spelling_error_rate_pct || 0).toFixed(1)}%)</span></td>
+                <td>${e.grammar_issues || 0}</td>
+                <td><button type="button" class="ta-details-btn" onclick="openToneDetails('${e.machine_id}')">View details</button></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function fmtTimestamp(ts) {
+    if (!ts) return '';
+    const d = new Date(ts.includes('T') || ts.includes('Z') ? ts : ts.replace(' ', 'T') + 'Z');
+    return isNaN(d.getTime()) ? ts : d.toLocaleString();
+}
+
+function renderDetailSection(title, items, renderItem) {
+    if (!items || !items.length) {
+        return `<div class="ta-detail-section"><h4>${title} (0)</h4><p class="ta-detail-empty">None found — nice!</p></div>`;
+    }
+    return `
+        <div class="ta-detail-section">
+            <h4>${title} (${items.length})</h4>
+            ${items.map(renderItem).join('')}
+        </div>
+    `;
+}
+
+async function openToneDetails(machineId) {
+    const modal = document.getElementById('taDetailModal');
+    const body = document.getElementById('taDetailBody');
+    const title = document.getElementById('taDetailTitle');
+    title.textContent = 'Loading…';
+    body.innerHTML = '<div class="loading">Loading details...</div>';
+    modal.style.display = 'flex';
+
+    try {
+        const response = await fetch(`${ROOT_PATH}/api/tone/details?machine_id=${encodeURIComponent(machineId)}`);
+        const data = await response.json();
+        const cats = data.categories || {};
+        title.textContent = `Details — ${data.display_name || data.machine_name || machineId} (${data.messages_analyzed || 0} messages)`;
+
+        body.innerHTML = [
+            renderDetailSection('🤬 Profanity', cats.profanity, item => `
+                <div class="ta-detail-item">
+                    <div class="ta-detail-meta">${fmtTimestamp(item.timestamp)}</div>
+                    <div class="ta-detail-text">${escapeHtml(item.text)}</div>
+                </div>
+            `),
+            renderDetailSection('😠 Rude phrases', cats.rude, item => `
+                <div class="ta-detail-item">
+                    <div class="ta-detail-meta">${fmtTimestamp(item.timestamp)}</div>
+                    <div class="ta-detail-text">${escapeHtml(item.text)}</div>
+                </div>
+            `),
+            renderDetailSection('😊 Polite phrases', cats.polite, item => `
+                <div class="ta-detail-item">
+                    <div class="ta-detail-meta">${fmtTimestamp(item.timestamp)}</div>
+                    <div class="ta-detail-text">${escapeHtml(item.text)}</div>
+                </div>
+            `),
+            renderDetailSection('✏️ Spelling errors', cats.misspellings, item => `
+                <div class="ta-detail-item">
+                    <div class="ta-detail-meta">${fmtTimestamp(item.timestamp)}</div>
+                    <div>${(item.words || []).map(w => `<span class="ta-detail-flag">${escapeHtml(w)}</span>`).join('')}</div>
+                    <div class="ta-detail-text" style="margin-top:0.35rem;">${escapeHtml(item.text)}</div>
+                </div>
+            `),
+            renderDetailSection('📝 Grammar issues', cats.grammar, item => `
+                <div class="ta-detail-item">
+                    <div class="ta-detail-meta">${fmtTimestamp(item.timestamp)}</div>
+                    <div>${(item.issues || []).map(g => `<span class="ta-detail-flag">${escapeHtml(g)}</span>`).join('')}</div>
+                    <div class="ta-detail-text" style="margin-top:0.35rem;">${escapeHtml(item.text)}</div>
+                </div>
+            `),
+        ].join('');
+    } catch (error) {
+        console.error('Failed to load tone details:', error);
+        title.textContent = 'Details';
+        body.innerHTML = '<p style="color: var(--text-secondary);">Failed to load details.</p>';
+    }
+}
+
+function closeToneDetails() {
+    document.getElementById('taDetailModal').style.display = 'none';
+}
+
+// openToneDetails/closeToneDetails are invoked from inline onclick="" markup
+// in the table/modal HTML above, which runs in global scope - plain
+// function declarations inside this IIFE aren't visible there, so they
+// must be attached to window explicitly.
+window.openToneDetails = openToneDetails;
+window.closeToneDetails = closeToneDetails;
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeToneDetails();
+});
+
+loadToneAnalysis();
+})();
+</script>
+{% endblock %}

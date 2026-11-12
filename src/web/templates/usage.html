@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected_machine %}Usage for {{ selected_machine.display_name }}{% else %}Usage Trends{% endif %} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Usage for <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Usage Trends</h2>
+    <p>Historical usage analytics</p>
+    {% endif %}
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>Sessions Over Time</h3>
+        <canvas id="sessionsChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+        <h3>Token Usage Over Time</h3>
+        <canvas id="tokensChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+        <h3>Session Duration Distribution</h3>
+        <canvas id="durationChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+        <h3>Hourly Activity Heatmap</h3>
+        <div id="heatmap">
+            <p class="text-muted">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<section class="section">
+    <h3>Time Range</h3>
+    <div class="time-range-selector">
+        <button onclick="loadCharts(7)" class="btn">Last 7 Days</button>
+        <button onclick="loadCharts(30)" class="btn active">Last 30 Days</button>
+        <button onclick="loadCharts(90)" class="btn">Last 90 Days</button>
+    </div>
+</section>
+
+<section class="section">
+    <h3>📊 Daily Claude Usage (Minutes)</h3>
+    <p class="subtitle">Time spent using Claude Code per day, by machine / user</p>
+
+    <div class="chart-card" style="margin-bottom: 2rem;">
+        <canvas id="dailyUsageChart"></canvas>
+    </div>
+
+    <div class="daily-usage-range">
+        <button onclick="loadDailyUsage(7)" class="btn btn-sm">7 Days</button>
+        <button onclick="loadDailyUsage(30)" class="btn btn-sm active" id="duBtn30">30 Days</button>
+        <button onclick="loadDailyUsage(90)" class="btn btn-sm">90 Days</button>
+    </div>
+
+    {% if daily_usage %}
+    <div class="table-container" style="margin-top: 1rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>User</th>
+                    <th>Machine</th>
+                    <th>Sessions</th>
+                    <th>Duration</th>
+                    <th>Usage Bar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set max_minutes = daily_usage|map(attribute='total_minutes')|max or 1 %}
+                {% for row in daily_usage %}
+                <tr>
+                    <td><strong>{{ row.date }}</strong></td>
+                    <td>
+                        {% if row.logged_in_user %}
+                            👤 {{ row.logged_in_user.split('<')[0].strip() }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="machine-tag">{{ row.machine_name or row.machine_id }}</span>
+                    </td>
+                    <td>{{ row.session_count }}</td>
+                    <td class="duration-cell">
+                        {% if row.total_minutes >= 60 %}
+                            {{ (row.total_minutes // 60)|int }}h {{ (row.total_minutes % 60)|int }}m
+                        {% else %}
+                            {{ row.total_minutes|int }}m
+                        {% endif %}
+                    </td>
+                    <td style="width: 30%;">
+                        <div class="usage-bar-bg">
+                            <div class="usage-bar" style="width: {{ (row.total_minutes / max_minutes * 100)|int }}%;"
+                                 title="{{ row.total_minutes }} minutes">
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="3"><strong>Total (Last 30 Days)</strong></td>
+                    <td><strong>{{ daily_usage|sum(attribute='session_count') }}</strong></td>
+                    <td class="duration-cell">
+                        {% set total_min = daily_usage|sum(attribute='total_minutes') %}
+                        <strong>
+                        {% if total_min >= 60 %}
+                            {{ (total_min // 60)|int }}h {{ (total_min % 60)|int }}m
+                        {% else %}
+                            {{ total_min|int }}m
+                        {% endif %}
+                        </strong>
+                    </td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No usage data available yet. Sessions need duration data (end_time) to calculate usage minutes.</p>
+    {% endif %}
+    <p class="text-muted" style="margin-top: 0.75rem; font-size: 0.8rem;">
+        Note: an individual session's duration is capped at 8h when computing usage minutes, so a session left open/idle
+        (e.g. terminal left open overnight) doesn't inflate the totals.
+    </p>
+</section>
+
+<section class="section">
+    <h3>Monthly Cost Breakdown</h3>
+    <p class="subtitle">Complete cost history by month</p>
+
+    {% if monthly_costs %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Sessions</th>
+                    <th>Input Tokens</th>
+                    <th>Output Tokens</th>
+                    <th>Cache Tokens <span class="info-tip" title="Cache read/write tokens (reused context). Billed at a different rate than input/output.">ⓘ</span></th>
+                    <th>Total Tokens <span class="info-tip" title="Input + Output + Cache tokens combined">ⓘ</span></th>
+                    <th>Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for month_data in monthly_costs %}
+                <tr>
+                    <td class="month-cell">
+                        <strong>{{ month_data.month_name }} {{ month_data.year }}</strong>
+                    </td>
+                    <td>{{ month_data.session_count }}</td>
+                    <td>{{ "{:,}".format(month_data.input_tokens or 0) }}</td>
+                    <td>{{ "{:,}".format(month_data.output_tokens or 0) }}</td>
+                    <td class="cache-cell">{{ "{:,}".format(month_data.cache_tokens or 0) }}</td>
+                    <td>{{ (month_data.total_tokens or 0)|compact_number }}</td>
+                    <td class="cost-cell">${{ "%.2f"|format(month_data.total_cost or 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td><strong>Total</strong></td>
+                    <td><strong>{{ monthly_costs|sum(attribute='session_count') }}</strong></td>
+                    <td><strong>{{ "{:,}".format(monthly_costs|sum(attribute='input_tokens') or 0) }}</strong></td>
+                    <td><strong>{{ "{:,}".format(monthly_costs|sum(attribute='output_tokens') or 0) }}</strong></td>
+                    <td class="cache-cell"><strong>{{ "{:,}".format(monthly_costs|sum(attribute='cache_tokens') or 0) }}</strong></td>
+                    <td><strong>{{ (monthly_costs|sum(attribute='total_tokens') or 0)|compact_number }}</strong></td>
+                    <td class="cost-cell"><strong>${{ "%.2f"|format(monthly_costs|sum(attribute='total_cost') or 0) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No cost data available yet.</p>
+    {% endif %}
+</section>
+
+<style>
+.subtitle {
+    color: #6b7280;
+    margin-top: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.month-cell {
+    color: #374151;
+    font-size: 0.95rem;
+}
+
+.cost-cell {
+    color: #059669;
+    font-weight: 600;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.cache-cell {
+    color: #b45309;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.info-tip {
+    cursor: help;
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+
+.hm-table { border-collapse: collapse; width: 100%; }
+.hm-table td, .hm-table th { padding: 3px; text-align: center; font-size: 0.7rem; }
+.hm-table th { color: #6b7280; font-weight: 500; }
+.hm-cell {
+    width: 22px; height: 20px; border-radius: 3px;
+    display: inline-block; cursor: default;
+}
+
+.total-row {
+    background: #f3f4f6;
+    border-top: 2px solid #d1d5db;
+}
+
+.total-row td {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+.text-muted {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.machine-tag {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1e40af;
+    padding: 0.15rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.duration-cell {
+    color: #7c3aed;
+    font-weight: 600;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.usage-bar-bg {
+    background: #f3f4f6;
+    border-radius: 6px;
+    height: 20px;
+    overflow: hidden;
+}
+
+.usage-bar {
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    height: 100%;
+    border-radius: 6px;
+    min-width: 2px;
+    transition: width 0.3s ease;
+}
+
+.daily-usage-range {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.daily-usage-range .btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let sessionsChart, tokensChart, durationChart, dailyUsageChart;
+
+// Extract machine_id from URL for API calls
+const _machineParam = new URLSearchParams(window.location.search).get('machine_id');
+const _mq = _machineParam ? `&machine_id=${_machineParam}` : '';
+
+async function loadDailyUsage(days = 30) {
+    // Mark active button
+    document.querySelectorAll('.daily-usage-range .btn-sm').forEach(btn => btn.classList.remove('active'));
+    if (event?.target) event.target.classList.add('active');
+
+    const resp = await fetch(`${ROOT_PATH}/api/stats/daily-usage?days=${days}${_mq}`);
+    const data = await resp.json();
+
+    // Group daily data by date, summing across machines
+    const byDate = {};
+    const machines = new Set();
+    data.daily.forEach(row => {
+        machines.add(row.machine_name || row.machine_id);
+        if (!byDate[row.date]) byDate[row.date] = {};
+        byDate[row.date][row.machine_name || row.machine_id] = row.total_minutes;
+    });
+
+    const dates = Object.keys(byDate).sort();
+    const machineList = [...machines];
+
+    const colors = [
+        { bg: 'rgba(99, 102, 241, 0.6)',  border: 'rgb(99, 102, 241)' },
+        { bg: 'rgba(16, 185, 129, 0.6)',   border: 'rgb(16, 185, 129)' },
+        { bg: 'rgba(245, 158, 11, 0.6)',   border: 'rgb(245, 158, 11)' },
+        { bg: 'rgba(239, 68, 68, 0.6)',    border: 'rgb(239, 68, 68)' },
+    ];
+
+    const datasets = machineList.map((machine, i) => {
+        const color = colors[i % colors.length];
+        // Find user label for this machine
+        const row = data.daily.find(r => (r.machine_name || r.machine_id) === machine);
+        const user = row?.logged_in_user ? row.logged_in_user.split('<')[0].trim() : '';
+        const label = user ? `${machine} (${user})` : machine;
+        return {
+            label: label,
+            data: dates.map(d => byDate[d]?.[machine] || 0),
+            backgroundColor: color.bg,
+            borderColor: color.border,
+            borderWidth: 1,
+        };
+    });
+
+    if (dailyUsageChart) dailyUsageChart.destroy();
+    dailyUsageChart = new Chart(document.getElementById('dailyUsageChart'), {
+        type: 'bar',
+        data: { labels: dates, datasets: datasets },
+        options: {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: `Daily Claude Usage (Last ${days} Days)` },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const mins = ctx.raw;
+                            if (mins >= 60) return `${ctx.dataset.label}: ${Math.floor(mins/60)}h ${Math.round(mins%60)}m`;
+                            return `${ctx.dataset.label}: ${Math.round(mins)}m`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { stacked: true },
+                y: {
+                    stacked: true,
+                    title: { display: true, text: 'Minutes' },
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+}
+
+async function loadCharts(days = 30) {
+    // Mark active button
+    document.querySelectorAll('.time-range-selector .btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event?.target?.classList.add('active');
+
+    // Load sessions data
+    const sessionsData = await fetch(`${ROOT_PATH}/api/stats/sessions?days=${days}${_mq}`).then(r => r.json());
+    const tokensData = await fetch(`${ROOT_PATH}/api/stats/tokens?days=${days}${_mq}`).then(r => r.json());
+    const complexityData = await fetch(`${ROOT_PATH}/api/insights/session-complexity?days=${days}${_mq}`).then(r => r.json());
+    const peakHoursData = await fetch(`${ROOT_PATH}/api/insights/peak-hours?days=${days}${_mq}`).then(r => r.json());
+
+    // Sessions chart
+    if (sessionsChart) sessionsChart.destroy();
+    sessionsChart = new Chart(document.getElementById('sessionsChart'), {
+        type: 'line',
+        data: {
+            labels: sessionsData.map(d => d.date),
+            datasets: [{
+                label: 'Sessions',
+                data: sessionsData.map(d => d.count),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    // Tokens chart
+    if (tokensChart) tokensChart.destroy();
+    tokensChart = new Chart(document.getElementById('tokensChart'), {
+        type: 'bar',
+        data: {
+            labels: tokensData.map(d => d.date),
+            datasets: [{
+                label: 'Input Tokens',
+                data: tokensData.map(d => d.input_tokens || 0),
+                backgroundColor: 'rgba(54, 162, 235, 0.5)'
+            }, {
+                label: 'Output Tokens',
+                data: tokensData.map(d => d.output_tokens || 0),
+                backgroundColor: 'rgba(255, 99, 132, 0.5)'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true }
+            }
+        }
+    });
+
+    // Duration distribution chart — real data from session-complexity insight
+    const durBuckets = complexityData.duration_distribution || {};
+    if (durationChart) durationChart.destroy();
+    durationChart = new Chart(document.getElementById('durationChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(durBuckets),
+            datasets: [{
+                label: 'Sessions',
+                data: Object.values(durBuckets),
+                backgroundColor: 'rgba(153, 102, 255, 0.5)'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    // Hourly activity heatmap (day-of-week x hour-of-day)
+    renderHeatmap(peakHoursData);
+}
+
+function renderHeatmap(data) {
+    const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
+    let max = 1;
+    (data || []).forEach(d => {
+        grid[d.dow][d.hour] = d.count;
+        if (d.count > max) max = d.count;
+    });
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = '<table class="hm-table"><thead><tr><th></th>';
+    for (let h = 0; h < 24; h++) html += `<th>${h}</th>`;
+    html += '</tr></thead><tbody>';
+    for (let d = 0; d < 7; d++) {
+        html += `<tr><th>${dayNames[d]}</th>`;
+        for (let h = 0; h < 24; h++) {
+            const v = grid[d][h];
+            const intensity = v / max;
+            const bg = v === 0 ? '#f3f4f6' : `rgba(99,102,241,${0.15 + intensity * 0.85})`;
+            const fg = intensity > 0.5 ? 'white' : '#374151';
+            html += `<td><span class="hm-cell" style="background:${bg};color:${fg}" title="${dayNames[d]} ${h}:00 — ${v} sessions">${v || ''}</span></td>`;
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    const container = document.getElementById('heatmap');
+    if (container) container.innerHTML = html;
+}
+
+// Load charts on page load
+loadCharts(30);
+loadDailyUsage(30);
+</script>
+{% endblock %}

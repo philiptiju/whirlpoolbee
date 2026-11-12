@@ -1,0 +1,1462 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected_machine %}Insights — {{ selected_machine.display_name }}{% else %}Insights{% endif %} - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>📊 Insights — <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>📊 Insights</h2>
+    <p>Comprehensive analytics across all machines and users</p>
+    {% endif %}
+</div>
+
+<!-- Time range selector -->
+<div class="insights-controls">
+    <div class="time-range-selector">
+        <button onclick="setDays(7)" class="btn btn-sm">7 Days</button>
+        <button onclick="setDays(30)" class="btn btn-sm active" id="btn30">30 Days</button>
+        <button onclick="setDays(90)" class="btn btn-sm">90 Days</button>
+    </div>
+</div>
+
+<!-- Executive KPI Dashboard -->
+<div class="kpi-dashboard" id="kpiDashboard">
+    <div class="kpi-grid">
+        <div class="kpi-card accent-purple">
+            <div class="kpi-val" id="kpi-cost">—</div>
+            <div class="kpi-lbl">Total Cost</div>
+            <div class="kpi-trend" id="kpi-cost-trend"></div>
+        </div>
+        <div class="kpi-card accent-blue">
+            <div class="kpi-val" id="kpi-sessions">—</div>
+            <div class="kpi-lbl">Sessions</div>
+            <div class="kpi-trend" id="kpi-sessions-trend"></div>
+        </div>
+        <div class="kpi-card accent-green">
+            <div class="kpi-val" id="kpi-hours">—</div>
+            <div class="kpi-lbl">Total Hours</div>
+        </div>
+        <div class="kpi-card accent-teal">
+            <div class="kpi-val" id="kpi-devs">—</div>
+            <div class="kpi-lbl">Active Developers</div>
+        </div>
+        <div class="kpi-card accent-amber">
+            <div class="kpi-val" id="kpi-cost-dev">—</div>
+            <div class="kpi-lbl">Cost / Dev / Day</div>
+        </div>
+        <div class="kpi-card accent-pink">
+            <div class="kpi-val" id="kpi-avg-session">—</div>
+            <div class="kpi-lbl">Avg Session (min)</div>
+        </div>
+        <div class="kpi-card accent-indigo">
+            <div class="kpi-val" id="kpi-per-day">—</div>
+            <div class="kpi-lbl">Sessions / Day</div>
+        </div>
+        <div class="kpi-card accent-emerald">
+            <div class="kpi-val" id="kpi-efficiency">—</div>
+            <div class="kpi-lbl">Output Efficiency</div>
+        </div>
+    </div>
+    <div class="kpi-chart-row">
+        <div class="kpi-mini-chart"><canvas id="kpiWeeklyChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Row -1: Anomaly Detection -->
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">warning_amber</i> Anomaly Detection
+            <span class="subtitle" style="font-size:0.75rem;font-weight:400">unusual cost/token/session spikes vs each user's/machine's own baseline</span>
+        </h3>
+        <div id="anomalyStats" class="stat-row"></div>
+        <div id="anomalyList" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 0: Budget Tracker + Model ROI -->
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">account_balance_wallet</i> Budget Tracker
+            <span class="budget-input-wrap">
+                Budget: $<input type="number" id="budgetInput" value="500" min="1" step="50" class="budget-input" onchange="loadBudgetTracker()">
+                <span>/month</span>
+            </span>
+        </h3>
+        <div id="budgetGauge" class="budget-gauge-wrap"></div>
+        <div id="budgetStats" class="stat-row"></div>
+        <div class="chart-wrap"><canvas id="budgetDailyChart"></canvas></div>
+        <div id="budgetUserTable" class="mini-table"></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">compare_arrows</i> Model ROI</h3>
+        <div id="modelRoiRecommendations" class="roi-recommendations"></div>
+        <div class="chart-wrap"><canvas id="modelRoiChart"></canvas></div>
+        <div id="modelRoiTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 0b: Cost Efficiency -->
+<div class="insights-row">
+    <div class="chart-card" style="flex:1">
+        <h3><i class="material-icons card-icon">speed</i> Cost Efficiency Scores</h3>
+        <div id="efficiencyStats" class="stat-row"></div>
+        <div class="chart-wrap"><canvas id="costDistChart"></canvas></div>
+    </div>
+    <div class="chart-card" style="flex:1.4">
+        <h3><i class="material-icons card-icon">warning</i> Flagged Expensive Sessions</h3>
+        <div id="flaggedTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 1: Cost per User + Model Usage -->
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">payments</i> Cost per User</h3>
+        <div class="chart-wrap"><canvas id="costPerUserChart"></canvas></div>
+        <div id="costPerUserTable" class="mini-table"></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">donut_large</i> Model Usage</h3>
+        <div class="chart-wrap"><canvas id="modelUsageChart"></canvas></div>
+        <div id="modelUsageTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 2: Peak Hours Heatmap + Tool Usage -->
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">schedule</i> Peak Usage Hours</h3>
+        <div id="peakHoursHeatmap" class="heatmap-grid"></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">build</i> Tool Usage</h3>
+        <div class="chart-wrap"><canvas id="toolUsageChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Row 3: Session Complexity + Duration Distribution -->
+<div class="insights-row">
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">layers</i> Session Complexity (Turns)</h3>
+        <div class="chart-wrap"><canvas id="turnDistChart"></canvas></div>
+        <div id="complexityStats" class="stat-row"></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">timer</i> Duration Distribution</h3>
+        <div class="chart-wrap"><canvas id="durDistChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Row 4: Cost Forecast + Productivity -->
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">trending_up</i> Cost Forecast</h3>
+        <div class="chart-wrap"><canvas id="costForecastChart"></canvas></div>
+        <div id="forecastStats" class="stat-row"></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">speed</i> Productivity Score</h3>
+        <div id="productivityStats" class="stat-row"></div>
+        <div class="chart-wrap"><canvas id="productivityChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Row 5: Project Heatmap -->
+<div class="insights-row">
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">folder</i> Top Projects</h3>
+        <div class="chart-wrap"><canvas id="projectChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Row 6: Top Prompts + Session Timeline -->
+<div class="insights-row">
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">chat</i> Top Prompts</h3>
+        <div id="topPromptsWords" class="word-cloud"></div>
+        <div id="topPromptsList" class="prompt-list"></div>
+    </div>
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">view_timeline</i> Session Timeline (7 Days)</h3>
+        <div id="sessionTimeline" class="timeline-container"></div>
+    </div>
+</div>
+
+<!-- Row 7: Resource Health Monitor -->
+<div class="insights-row">
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">monitor_heart</i> Resource Health — CPU & Memory</h3>
+        <div id="resourceOverall" class="stat-row"></div>
+        <div class="chart-wrap" style="max-height:320px"><canvas id="resourceChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">memory</i> Resource Hogs (Top Sessions)</h3>
+        <div id="resourceHogsTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 8: Context Switches + Developer Velocity -->
+<div class="insights-row">
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">swap_horiz</i> Context Switches</h3>
+        <div id="contextStats" class="stat-row"></div>
+        <div class="chart-wrap"><canvas id="contextChart"></canvas></div>
+        <div id="contextUserTable" class="mini-table"></div>
+    </div>
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">rocket_launch</i> Developer Velocity (Weekly)</h3>
+        <div class="chart-wrap" style="max-height:320px"><canvas id="velocityChart"></canvas></div>
+        <div id="velocityTable" class="mini-table"></div>
+    </div>
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">label</i> Velocity by Tag <span class="subtitle" style="font-size:0.75rem;font-weight:400">bugfix / feature / refactor breakdown</span></h3>
+        <div id="tagVelocityStats" class="stat-row"></div>
+        <div class="chart-wrap" style="max-height:320px"><canvas id="tagVelocityChart"></canvas></div>
+        <div id="tagVelocityTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 9: Adoption & Engagement + Exit Analysis -->
+<div class="insights-row">
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">trending_up</i> Adoption & Engagement</h3>
+        <div class="chart-wrap"><canvas id="adoptionChart"></canvas></div>
+        <div id="adoptionTable" class="mini-table"></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">exit_to_app</i> Session Exit Analysis</h3>
+        <div id="exitStats" class="stat-row"></div>
+        <div class="chart-wrap"><canvas id="exitChart"></canvas></div>
+        <div id="exitErrorTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 10: Conversation Depth + Response Size Trends -->
+<div class="insights-row">
+    <div class="chart-card">
+        <h3><i class="material-icons card-icon">forum</i> Conversation Depth</h3>
+        <div id="depthStats" class="stat-row"></div>
+        <div class="chart-wrap"><canvas id="depthChart"></canvas></div>
+        <div id="depthTable" class="mini-table"></div>
+    </div>
+    <div class="chart-card wide">
+        <h3><i class="material-icons card-icon">auto_graph</i> Response Size Trends</h3>
+        <div id="responseTrend" class="stat-row"></div>
+        <div class="chart-wrap" style="max-height:320px"><canvas id="responseSizeChart"></canvas></div>
+        <div id="responseModelTable" class="mini-table"></div>
+    </div>
+</div>
+
+<!-- Row 11: Working Hours Heatmap -->
+<div class="insights-row">
+    <div class="chart-card" style="flex:1">
+        <h3><i class="material-icons card-icon">schedule</i> Working Hours per Developer</h3>
+        <div id="workingHoursContent"></div>
+    </div>
+</div>
+
+<!-- Row 12: Multi-Machine Comparison -->
+<div class="insights-row">
+    <div class="chart-card" style="flex:1">
+        <h3><i class="material-icons card-icon">devices</i> Multi-Machine Comparison</h3>
+        <div class="chart-wrap"><canvas id="machineCompareChart"></canvas></div>
+        <div id="machineCompareTable" class="mini-table"></div>
+    </div>
+</div>
+
+<style>
+.insights-controls {
+    display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center;
+}
+.insights-row {
+    display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+}
+.chart-card {
+    flex: 1; min-width: 320px; background: white; border-radius: 10px;
+    padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+}
+.chart-card.wide { flex: 1.6; }
+.chart-card h3 {
+    font-size: 0.95rem; color: #374151; margin: 0 0 1rem 0;
+    display: flex; align-items: center; gap: 0.5rem;
+}
+.card-icon { font-size: 1.1rem; color: #6366f1; }
+.chart-wrap { position: relative; max-height: 280px; }
+
+/* Mini tables */
+.mini-table { margin-top: 0.75rem; font-size: 0.8rem; }
+.mini-table table { width: 100%; border-collapse: collapse; }
+.mini-table th, .mini-table td { padding: 0.3rem 0.5rem; text-align: left; border-bottom: 1px solid #f3f4f6; }
+.mini-table th { color: #6b7280; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; }
+.mini-table .cost { color: #059669; font-family: monospace; font-weight: 600; }
+
+/* Stat row */
+.stat-row { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.75rem 0; }
+.stat-box {
+    flex: 1; min-width: 80px; padding: 0.5rem 0.75rem; background: #f8fafc;
+    border-radius: 8px; text-align: center; border: 1px solid #e2e8f0;
+}
+.stat-box .val { font-size: 1.3rem; font-weight: 700; color: #1e293b; }
+.stat-box .lbl { font-size: 0.65rem; color: #64748b; text-transform: uppercase; margin-top: 0.15rem; }
+
+/* Heatmap */
+.heatmap-grid { overflow-x: auto; }
+.hm-table { border-collapse: collapse; width: 100%; }
+.hm-table td, .hm-table th { padding: 3px; text-align: center; font-size: 0.7rem; }
+.hm-table th { color: #6b7280; font-weight: 500; }
+.hm-cell {
+    width: 28px; height: 24px; border-radius: 3px;
+    display: inline-block; cursor: default;
+}
+
+/* Word cloud */
+.word-cloud { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; max-height: 120px; overflow-y: auto; }
+.word-tag {
+    display: inline-block; padding: 0.2rem 0.5rem; border-radius: 12px;
+    font-size: 0.75rem; font-weight: 500;
+}
+
+/* Prompt list */
+.prompt-list { max-height: 200px; overflow-y: auto; font-size: 0.8rem; }
+.prompt-item {
+    padding: 0.5rem; border-bottom: 1px solid #f3f4f6;
+    display: flex; gap: 0.5rem; align-items: flex-start;
+}
+.prompt-item .proj { color: #6366f1; font-size: 0.7rem; white-space: nowrap; min-width: 80px; }
+.prompt-item .text { color: #374151; line-height: 1.3; }
+
+/* Timeline */
+.timeline-container { overflow-x: auto; min-height: 120px; position: relative; }
+.tl-bar {
+    position: absolute; height: 18px; border-radius: 4px;
+    font-size: 0.6rem; color: white; padding: 0 4px;
+    overflow: hidden; white-space: nowrap; cursor: default;
+    display: flex; align-items: center;
+}
+
+/* KPI Dashboard */
+.kpi-dashboard { margin-bottom: 1.5rem; }
+.kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem; margin-bottom: 1rem;
+}
+.kpi-card {
+    background: white; border-radius: 12px; padding: 1.25rem 1rem; text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e5e7eb;
+    border-top: 3px solid #6366f1; transition: transform 0.15s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.kpi-card.accent-purple { border-top-color: #7c3aed; }
+.kpi-card.accent-blue { border-top-color: #3b82f6; }
+.kpi-card.accent-green { border-top-color: #10b981; }
+.kpi-card.accent-teal { border-top-color: #14b8a6; }
+.kpi-card.accent-amber { border-top-color: #f59e0b; }
+.kpi-card.accent-pink { border-top-color: #ec4899; }
+.kpi-card.accent-indigo { border-top-color: #6366f1; }
+.kpi-card.accent-emerald { border-top-color: #059669; }
+.kpi-val { font-size: 1.6rem; font-weight: 800; color: #1e293b; font-family: 'Inter', monospace; }
+.kpi-lbl { font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-top: 0.3rem; letter-spacing: 0.5px; }
+.kpi-trend { font-size: 0.75rem; margin-top: 0.3rem; font-weight: 600; }
+.kpi-trend.up { color: #ef4444; }
+.kpi-trend.down { color: #10b981; }
+.kpi-trend.neutral { color: #6b7280; }
+.kpi-chart-row { background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; }
+.kpi-mini-chart { max-height: 180px; }
+
+/* Budget Tracker */
+.budget-input-wrap { margin-left: auto; font-size: 0.8rem; color: #6b7280; display: flex; align-items: center; gap: 0.25rem; }
+.budget-input { width: 80px; padding: 0.2rem 0.4rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.8rem; text-align: right; }
+.budget-gauge-wrap { display: flex; align-items: center; gap: 1.5rem; padding: 1rem 0; }
+.budget-gauge {
+    position: relative; width: 100%; height: 28px; background: #f1f5f9; border-radius: 14px; overflow: hidden;
+}
+.budget-gauge-fill {
+    height: 100%; border-radius: 14px; transition: width 0.5s ease; display: flex; align-items: center;
+    justify-content: flex-end; padding-right: 10px; font-size: 0.75rem; font-weight: 700; color: white;
+    min-width: 40px;
+}
+.budget-gauge-fill.on-track { background: linear-gradient(90deg, #10b981, #059669); }
+.budget-gauge-fill.warning { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.budget-gauge-fill.at-risk { background: linear-gradient(90deg, #f97316, #ea580c); }
+.budget-gauge-fill.over-budget { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.budget-status { font-size: 0.85rem; font-weight: 700; white-space: nowrap; }
+.budget-status.on_track { color: #059669; }
+.budget-status.warning { color: #d97706; }
+.budget-status.at_risk { color: #ea580c; }
+.budget-status.over_budget { color: #dc2626; }
+
+/* Model ROI */
+.roi-recommendations { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.roi-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.6rem;
+    border-radius: 20px; font-size: 0.7rem; font-weight: 600;
+}
+.roi-badge.cheapest { background: #dcfce7; color: #166534; }
+.roi-badge.productive { background: #dbeafe; color: #1e40af; }
+.roi-badge.popular { background: #fef3c7; color: #92400e; }
+
+/* Working Hours Heatmap */
+.wh-user-section { margin-bottom: 1.5rem; }
+.wh-user-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+.wh-user-name { font-weight: 700; font-size: 0.9rem; color: #1e293b; }
+.burnout-badge { padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+.burnout-badge.low { background: #dcfce7; color: #166534; }
+.burnout-badge.medium { background: #fef3c7; color: #92400e; }
+.burnout-badge.high { background: #fee2e2; color: #991b1b; }
+.wh-stats { display: flex; gap: 1rem; font-size: 0.75rem; color: #6b7280; margin-bottom: 0.5rem; }
+.wh-table { border-collapse: collapse; width: 100%; }
+.wh-table td, .wh-table th { padding: 2px 3px; text-align: center; font-size: 0.65rem; }
+.wh-table th { color: #6b7280; font-weight: 500; }
+.wh-cell { width: 24px; height: 20px; border-radius: 3px; display: inline-block; }
+
+/* Machine Comparison */
+.compare-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0; }
+.compare-fill { height: 20px; border-radius: 4px; min-width: 2px; transition: width 0.4s; }
+.compare-label { font-size: 0.75rem; color: #374151; min-width: 80px; }
+
+.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MQ = new URLSearchParams(window.location.search).get('machine_id');
+const mq = MQ ? `&machine_id=${MQ}` : '';
+let DAYS = 30;
+const charts = {};
+const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#14b8a6'];
+
+function setDays(d) {
+    DAYS = d;
+    document.querySelectorAll('.time-range-selector .btn-sm').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    loadAll();
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+async function loadAll() {
+    await Promise.all([
+        loadAnomalies(),
+        loadExecutiveKPI(),
+        loadBudgetTracker(),
+        loadModelROI(),
+        loadCostEfficiency(),
+        loadCostPerUser(),
+        loadModelUsage(),
+        loadPeakHours(),
+        loadToolUsage(),
+        loadSessionComplexity(),
+        loadCostForecast(),
+        loadProductivity(),
+        loadProjectHeatmap(),
+        loadTopPrompts(),
+        loadTimeline(),
+        loadResourceHealth(),
+        loadContextSwitches(),
+        loadDevVelocity(),
+        loadTagVelocity(),
+        loadAdoption(),
+        loadExitAnalysis(),
+        loadConversationDepth(),
+        loadWorkingHours(),
+        loadMachineComparison(),
+        loadResponseSizeTrends(),
+    ]);
+}
+
+// ── HIGH-VALUE REPORTS ───────────────────────────────────────
+
+// Executive KPI Dashboard
+async function loadExecutiveKPI() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/executive-kpi?days=${DAYS}${mq}`).then(r => r.json());
+    const k = data.kpis;
+    document.getElementById('kpi-cost').textContent = `$${k.total_cost.toFixed(2)}`;
+    document.getElementById('kpi-sessions').textContent = k.total_sessions;
+    document.getElementById('kpi-hours').textContent = `${k.total_hours}h`;
+    document.getElementById('kpi-devs').textContent = k.unique_devs;
+    document.getElementById('kpi-cost-dev').textContent = `$${(k.cost_per_dev_day || 0).toFixed(2)}`;
+    document.getElementById('kpi-avg-session').textContent = `${k.avg_session_min}`;
+    document.getElementById('kpi-per-day').textContent = k.sessions_per_day;
+    document.getElementById('kpi-efficiency').textContent = `${k.output_efficiency}%`;
+
+    const t = data.trends;
+    const costTrend = document.getElementById('kpi-cost-trend');
+    const arrow = t.cost_change_pct > 0 ? '▲' : t.cost_change_pct < 0 ? '▼' : '—';
+    const cls = t.cost_change_pct > 10 ? 'up' : t.cost_change_pct < -10 ? 'down' : 'neutral';
+    costTrend.innerHTML = `${arrow} ${Math.abs(t.cost_change_pct)}% vs prev period`;
+    costTrend.className = `kpi-trend ${cls}`;
+
+    const sessTrend = document.getElementById('kpi-sessions-trend');
+    const sa = t.session_change_pct > 0 ? '▲' : t.session_change_pct < 0 ? '▼' : '—';
+    const sc = t.session_change_pct > 0 ? 'down' : t.session_change_pct < 0 ? 'up' : 'neutral'; // more sessions = green
+    sessTrend.innerHTML = `${sa} ${Math.abs(t.session_change_pct)}%`;
+    sessTrend.className = `kpi-trend ${sc}`;
+
+    // Weekly mini chart
+    destroyChart('kpiWeeklyChart');
+    if (data.weekly.length) {
+        charts['kpiWeeklyChart'] = new Chart(document.getElementById('kpiWeeklyChart'), {
+            type: 'bar',
+            data: {
+                labels: data.weekly.map(w => w.week),
+                datasets: [
+                    { label: 'Cost ($)', data: data.weekly.map(w => w.cost), backgroundColor: '#6366f1', yAxisID: 'y' },
+                    { label: 'Sessions', data: data.weekly.map(w => w.sessions), type: 'line', borderColor: '#10b981', yAxisID: 'y1', tension: 0.3, pointRadius: 4 },
+                ]
+            },
+            options: {
+                responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+                scales: {
+                    y: { beginAtZero: true, position: 'left', title: { display: true, text: 'Cost ($)' } },
+                    y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Sessions' } },
+                }
+            }
+        });
+    }
+}
+
+// Anomaly Detection
+const SEVERITY_BADGE = { high: '🔴 High', medium: '🟠 Medium', low: '🟡 Low' };
+const METRIC_LABEL = { daily_cost: 'Cost', daily_tokens: 'Tokens', daily_sessions: 'Sessions' };
+
+async function loadAnomalies() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/anomalies?days=${DAYS}${mq}`).then(r => r.json());
+    const anomalies = (data.anomalies || []).filter(a => a.status !== 'dismissed');
+    const openCount = anomalies.filter(a => a.status === 'open').length;
+
+    document.getElementById('anomalyStats').innerHTML = `
+        <div class="stat-box"><div class="val">${openCount}</div><div class="lbl">Open Anomalies</div></div>
+        <div class="stat-box"><div class="val">${data.summary.high || 0}</div><div class="lbl">High Severity</div></div>
+        <div class="stat-box"><div class="val">${data.summary.medium || 0}</div><div class="lbl">Medium Severity</div></div>
+    `;
+
+    const list = document.getElementById('anomalyList');
+    if (!anomalies.length) {
+        list.innerHTML = '<p class="text-muted">✅ No unusual spikes detected in this period.</p>';
+        return;
+    }
+    let html = '<table><thead><tr><th>Severity</th><th>Scope</th><th>Metric</th><th>Date</th><th>Observed</th><th>Baseline Avg</th><th>Status</th><th></th></tr></thead><tbody>';
+    anomalies.forEach(a => {
+        const observed = a.metric === 'daily_cost' ? `$${a.observed_value.toFixed(2)}` : Math.round(a.observed_value).toLocaleString();
+        const baseline = a.metric === 'daily_cost' ? `$${(a.baseline_mean||0).toFixed(2)}` : Math.round(a.baseline_mean||0).toLocaleString();
+        html += `<tr>
+            <td>${SEVERITY_BADGE[a.severity] || a.severity}</td>
+            <td>${a.scope_type === 'user' ? '👤' : '💻'} ${escapeHtml(a.scope_label || a.scope_id)}</td>
+            <td>${METRIC_LABEL[a.metric] || a.metric}</td>
+            <td>${a.metric_date}</td>
+            <td>${observed}</td>
+            <td>${baseline} (z=${a.deviation_score})</td>
+            <td>${a.status}</td>
+            <td>${a.status === 'open' ? `<button class="btn btn-sm" onclick="ackAnomaly(${a.id})">Ack</button> <button class="btn btn-sm" onclick="dismissAnomaly(${a.id})">Dismiss</button>` : ''}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    list.innerHTML = html;
+}
+
+async function ackAnomaly(id) {
+    await fetch(`${ROOT_PATH}/api/anomalies/${id}/acknowledge`, { method: 'POST' });
+    loadAnomalies();
+}
+
+async function dismissAnomaly(id) {
+    await fetch(`${ROOT_PATH}/api/anomalies/${id}/dismiss`, { method: 'POST' });
+    loadAnomalies();
+}
+
+// Budget Tracker
+async function loadBudgetTracker() {
+    const budget = parseFloat(document.getElementById('budgetInput').value) || 500;
+    const data = await fetch(`${ROOT_PATH}/api/insights/budget-tracker?monthly_budget=${budget}${mq}`).then(r => r.json());
+    const b = data.budget;
+
+    // Gauge
+    const pct = Math.min(b.budget_used_pct, 120);
+    const statusLabels = { on_track: '✅ On Track', warning: '⚠️ Warning', at_risk: '🔶 At Risk', over_budget: '🔴 Over Budget' };
+    document.getElementById('budgetGauge').innerHTML = `
+        <div style="flex:1">
+            <div class="budget-gauge">
+                <div class="budget-gauge-fill ${b.status}" style="width:${Math.min(pct, 100)}%">${b.budget_used_pct}%</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#9ca3af;margin-top:4px">
+                <span>$0</span><span>$${budget}</span>
+            </div>
+        </div>
+        <div class="budget-status ${b.status}">${statusLabels[b.status] || b.status}</div>
+    `;
+
+    // Stats
+    document.getElementById('budgetStats').innerHTML = `
+        <div class="stat-box"><div class="val">$${b.month_spent.toFixed(2)}</div><div class="lbl">Spent This Month</div></div>
+        <div class="stat-box"><div class="val">$${b.budget_remaining.toFixed(2)}</div><div class="lbl">Remaining</div></div>
+        <div class="stat-box"><div class="val">$${(b.daily_burn_rate || 0).toFixed(2)}</div><div class="lbl">Daily Burn</div></div>
+        <div class="stat-box"><div class="val">$${(b.projected_total || 0).toFixed(2)}</div><div class="lbl">Projected Total</div></div>
+        ${b.overshoot_date ? `<div class="stat-box"><div class="val" style="font-size:0.9rem;color:#dc2626">${b.overshoot_date}</div><div class="lbl">Overshoot Date</div></div>` : ''}
+    `;
+
+    // Daily spend chart
+    destroyChart('budgetDailyChart');
+    if (data.daily_spend.length) {
+        const cumulative = [];
+        let sum = 0;
+        data.daily_spend.forEach(d => { sum += d.cost; cumulative.push(round2(sum)); });
+        charts['budgetDailyChart'] = new Chart(document.getElementById('budgetDailyChart'), {
+            type: 'bar',
+            data: {
+                labels: data.daily_spend.map(d => d.date.substring(5)),
+                datasets: [
+                    { label: 'Daily Cost', data: data.daily_spend.map(d => d.cost), backgroundColor: '#6366f1', yAxisID: 'y' },
+                    { label: 'Cumulative', data: cumulative, type: 'line', borderColor: '#ef4444', yAxisID: 'y1', tension: 0.3, pointRadius: 2 },
+                    { label: 'Budget Line', data: Array(data.daily_spend.length).fill(budget), type: 'line', borderColor: '#d1d5db', borderDash: [5,5], yAxisID: 'y1', pointRadius: 0 },
+                ]
+            },
+            options: {
+                responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Daily ($)' } },
+                    y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Cumulative ($)' } },
+                }
+            }
+        });
+    }
+
+    // Per-user table
+    if (data.per_user.length) {
+        let html = '<table><thead><tr><th>User</th><th>Sessions</th><th>Cost</th><th>Share</th></tr></thead><tbody>';
+        data.per_user.forEach(u => {
+            const name = (u.user_name || 'Unknown').split('<')[0].trim();
+            const share = b.month_spent > 0 ? round2(u.cost / b.month_spent * 100) : 0;
+            html += `<tr><td>${escapeHtml(name)}</td><td>${u.sessions}</td><td class="cost">$${u.cost.toFixed(2)}</td><td>${share}%</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('budgetUserTable').innerHTML = html;
+    }
+}
+
+// Model ROI Comparison
+async function loadModelROI() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/model-roi?days=${DAYS}${mq}`).then(r => r.json());
+
+    // Recommendations badges
+    const rec = data.recommendations;
+    let badges = '';
+    if (rec.cheapest_per_output) badges += `<span class="roi-badge cheapest">💰 Cheapest: ${escapeHtml(shortModel(rec.cheapest_per_output))}</span>`;
+    if (rec.most_productive) badges += `<span class="roi-badge productive">⚡ Most Output: ${escapeHtml(shortModel(rec.most_productive))}</span>`;
+    if (rec.most_popular) badges += `<span class="roi-badge popular">🔥 Most Used: ${escapeHtml(shortModel(rec.most_popular))}</span>`;
+    document.getElementById('modelRoiRecommendations').innerHTML = badges;
+
+    // Grouped bar chart: cost per 1K output vs cost per 1K input
+    destroyChart('modelRoiChart');
+    const models = data.models;
+    if (models.length) {
+        charts['modelRoiChart'] = new Chart(document.getElementById('modelRoiChart'), {
+            type: 'bar',
+            data: {
+                labels: models.map(m => shortModel(m.model_name)),
+                datasets: [
+                    { label: '$/1K Output', data: models.map(m => m.cost_per_1k_output), backgroundColor: '#6366f1' },
+                    { label: '$/1K Input', data: models.map(m => m.cost_per_1k_input), backgroundColor: '#10b981' },
+                ]
+            },
+            options: {
+                responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Cost ($)' } } }
+            }
+        });
+    }
+
+    // Table
+    let html = '<table><thead><tr><th>Model</th><th>Calls</th><th>$/1K Out</th><th>$/Call</th><th>Total</th></tr></thead><tbody>';
+    models.forEach(m => {
+        html += `<tr><td>${escapeHtml(shortModel(m.model_name))}</td><td>${m.api_calls}</td>
+                 <td class="cost">$${m.cost_per_1k_output.toFixed(2)}</td>
+                 <td class="cost">$${m.cost_per_call.toFixed(2)}</td>
+                 <td class="cost">$${m.total_cost.toFixed(2)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('modelRoiTable').innerHTML = html;
+}
+
+// Cost Efficiency
+async function loadCostEfficiency() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/cost-efficiency?days=${DAYS}${mq}`).then(r => r.json());
+    const s = data.stats;
+
+    // Stats row
+    document.getElementById('efficiencyStats').innerHTML = `
+        <div class="stat-box"><div class="val">${s.total_sessions}</div><div class="lbl">Sessions Scored</div></div>
+        <div class="stat-box"><div class="val">$${(s.median_cost || 0).toFixed(2)}</div><div class="lbl">Median Cost</div></div>
+        <div class="stat-box"><div class="val">$${(s.p90_cost || 0).toFixed(2)}</div><div class="lbl">P90 Cost</div></div>
+        <div class="stat-box"><div class="val">$${(s.avg_cost_per_min || 0).toFixed(2)}</div><div class="lbl">Avg $/min</div></div>
+        <div class="stat-box"><div class="val" style="color:${s.total_flagged > 0 ? '#dc2626' : '#059669'}">${s.total_flagged}</div><div class="lbl">⚠ Flagged</div></div>
+    `;
+
+    // Cost distribution donut
+    destroyChart('costDistChart');
+    const d = data.cost_distribution;
+    charts['costDistChart'] = new Chart(document.getElementById('costDistChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['< $1', '$1-5', '$5-10', '$10-25', '> $25'],
+            datasets: [{ data: [d.under_1, d['1_to_5'], d['5_to_10'], d['10_to_25'], d.over_25],
+                         backgroundColor: ['#10b981','#6366f1','#f59e0b','#f97316','#ef4444'] }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+    });
+
+    // Flagged sessions table
+    const flagged = data.flagged_expensive;
+    if (flagged.length) {
+        let html = '<table><thead><tr><th>Project</th><th>User</th><th>Model</th><th>Cost</th><th>$/min</th><th>Score</th></tr></thead><tbody>';
+        flagged.forEach(f => {
+            const scoreColor = f.efficiency_score > 50 ? '#059669' : f.efficiency_score > 25 ? '#f59e0b' : '#ef4444';
+            html += `<tr><td>${escapeHtml(f.project)}</td><td>${escapeHtml((f.user||'').split('<')[0].trim())}</td>
+                     <td>${escapeHtml(shortModel(f.model))}</td><td class="cost">$${f.cost.toFixed(2)}</td>
+                     <td>$${f.cost_per_min.toFixed(2)}</td>
+                     <td style="color:${scoreColor};font-weight:700">${f.efficiency_score}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('flaggedTable').innerHTML = html;
+    } else {
+        document.getElementById('flaggedTable').innerHTML = '<p style="color:#059669;font-size:0.85rem;text-align:center;padding:2rem">✅ No flagged expensive sessions</p>';
+    }
+}
+
+function shortModel(name) { return (name || 'unknown').replace('claude-','').replace('-20250929',''); }
+function round2(v) { return Math.round(v * 100) / 100; }
+
+// 1. Cost per User
+async function loadCostPerUser() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/cost-per-user?days=${DAYS}${mq}`).then(r => r.json());
+    destroyChart('costPerUserChart');
+    const labels = data.summary.map(d => {
+        const user = d.logged_in_user ? d.logged_in_user.split('<')[0].trim() : d.machine_name;
+        return user || d.machine_id;
+    });
+    charts['costPerUserChart'] = new Chart(document.getElementById('costPerUserChart'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Cost ($)', data: data.summary.map(d => d.cost),
+                backgroundColor: COLORS.slice(0, labels.length),
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'USD' } } } }
+    });
+    // Table
+    let html = '<table><thead><tr><th>User</th><th>Sessions</th><th>Hours</th><th>Cost</th></tr></thead><tbody>';
+    data.summary.forEach(d => {
+        const user = d.logged_in_user ? d.logged_in_user.split('<')[0].trim() : d.machine_name;
+        html += `<tr><td>${escapeHtml(user)}</td><td>${d.sessions}</td><td>${(d.total_seconds/3600).toFixed(1)}</td><td class="cost">$${d.cost.toFixed(2)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('costPerUserTable').innerHTML = html;
+}
+
+// 2. Model Usage
+async function loadModelUsage() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/model-usage?days=${DAYS}${mq}`).then(r => r.json());
+    destroyChart('modelUsageChart');
+    const labels = data.map(d => (d.model_name || 'unknown').replace('claude-', '').replace('-20250929',''));
+    charts['modelUsageChart'] = new Chart(document.getElementById('modelUsageChart'), {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{ data: data.map(d => d.cost), backgroundColor: COLORS }]
+        },
+        options: { responsive: true, plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 10 } } },
+            tooltip: { callbacks: { label: ctx => `${ctx.label}: $${ctx.raw.toFixed(2)}` } }
+        } }
+    });
+    let html = '<table><thead><tr><th>Model</th><th>Calls</th><th>Cost</th></tr></thead><tbody>';
+    data.forEach(d => {
+        html += `<tr><td>${escapeHtml((d.model_name||'?').replace('claude-',''))}</td><td>${d.call_count}</td><td class="cost">$${d.cost.toFixed(2)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('modelUsageTable').innerHTML = html;
+}
+
+// 3. Peak Hours Heatmap
+async function loadPeakHours() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/peak-hours?days=${DAYS}${mq}`).then(r => r.json());
+    const grid = Array.from({length: 7}, () => Array(24).fill(0));
+    let max = 1;
+    data.forEach(d => { grid[d.dow][d.hour] = d.count; if (d.count > max) max = d.count; });
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    let html = '<table class="hm-table"><thead><tr><th></th>';
+    for (let h = 0; h < 24; h++) html += `<th>${h}</th>`;
+    html += '</tr></thead><tbody>';
+    for (let d = 0; d < 7; d++) {
+        html += `<tr><th>${days[d]}</th>`;
+        for (let h = 0; h < 24; h++) {
+            const v = grid[d][h];
+            const intensity = v / max;
+            const bg = v === 0 ? '#f3f4f6' : `rgba(99,102,241,${0.15 + intensity * 0.85})`;
+            const fg = intensity > 0.5 ? 'white' : '#374151';
+            html += `<td><span class="hm-cell" style="background:${bg};color:${fg}" title="${days[d]} ${h}:00 — ${v} sessions">${v || ''}</span></td>`;
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('peakHoursHeatmap').innerHTML = html;
+}
+
+// 4. Tool Usage
+async function loadToolUsage() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/tool-usage?days=${DAYS}${mq}`).then(r => r.json());
+    destroyChart('toolUsageChart');
+    const tools = data.tools.slice(0, 12);
+    charts['toolUsageChart'] = new Chart(document.getElementById('toolUsageChart'), {
+        type: 'bar',
+        data: {
+            labels: tools.map(t => t.name),
+            datasets: [{ label: 'Calls', data: tools.map(t => t.count), backgroundColor: '#6366f1' }]
+        },
+        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+
+// 5. Session Complexity
+async function loadSessionComplexity() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/session-complexity?days=${DAYS}${mq}`).then(r => r.json());
+    destroyChart('turnDistChart');
+    destroyChart('durDistChart');
+    const td = data.turn_distribution;
+    charts['turnDistChart'] = new Chart(document.getElementById('turnDistChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(td), datasets: [{ label: 'Sessions', data: Object.values(td), backgroundColor: '#8b5cf6' }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+    const dd = data.duration_distribution;
+    charts['durDistChart'] = new Chart(document.getElementById('durDistChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(dd), datasets: [{ label: 'Sessions', data: Object.values(dd), backgroundColor: '#10b981' }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+    document.getElementById('complexityStats').innerHTML = `
+        <div class="stat-box"><div class="val">${data.total}</div><div class="lbl">Total Sessions</div></div>
+        <div class="stat-box"><div class="val">${data.avg_turns}</div><div class="lbl">Avg Turns</div></div>
+        <div class="stat-box"><div class="val">${data.avg_duration_min}m</div><div class="lbl">Avg Duration</div></div>
+    `;
+}
+
+// 6. Cost Forecast
+async function loadCostForecast() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/cost-forecast?${mq.replace('&','')}`).then(r => r.json());
+    destroyChart('costForecastChart');
+    const labels = [...data.actual.map(d => d.date), ...data.forecast.map(d => d.date)];
+    const actual = data.actual.map(d => d.cost);
+    const forecast = [...Array(data.actual.length).fill(null), ...data.forecast.map(d => d.cost)];
+    charts['costForecastChart'] = new Chart(document.getElementById('costForecastChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Actual', data: [...actual, ...Array(data.forecast.length).fill(null)],
+                  borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 },
+                { label: 'Forecast', data: forecast,
+                  borderColor: '#f59e0b', borderDash: [5,5], tension: 0 }
+            ]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'USD' } } },
+            plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: $${(ctx.raw||0).toFixed(2)}` } } } }
+    });
+    document.getElementById('forecastStats').innerHTML = `
+        <div class="stat-box"><div class="val">$${(data.avg_daily_cost || 0).toFixed(2)}</div><div class="lbl">Avg Daily</div></div>
+        <div class="stat-box"><div class="val">$${(data.projected_monthly || 0).toFixed(2)}</div><div class="lbl">Projected/Month</div></div>
+    `;
+}
+
+// 7. Productivity
+async function loadProductivity() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/productivity?days=${DAYS}${mq}`).then(r => r.json());
+    destroyChart('productivityChart');
+    const t = data.totals;
+    document.getElementById('productivityStats').innerHTML = `
+        <div class="stat-box"><div class="val">${t.hours}</div><div class="lbl">Total Hours</div></div>
+        <div class="stat-box"><div class="val">${t.projects}</div><div class="lbl">Projects Touched</div></div>
+        <div class="stat-box"><div class="val">${t.hours_per_session}</div><div class="lbl">Hours/Session</div></div>
+        <div class="stat-box"><div class="val">${t.projects_per_session}</div><div class="lbl">Projects/Session</div></div>
+    `;
+    charts['productivityChart'] = new Chart(document.getElementById('productivityChart'), {
+        type: 'line',
+        data: {
+            labels: data.daily.map(d => d.date),
+            datasets: [
+                { label: 'Sessions', data: data.daily.map(d => d.sessions), borderColor: '#6366f1', yAxisID: 'y' },
+                { label: 'Projects', data: data.daily.map(d => d.projects), borderColor: '#10b981', yAxisID: 'y1' },
+            ]
+        },
+        options: { responsive: true, scales: {
+            y: { beginAtZero: true, position: 'left', title: { display: true, text: 'Sessions' } },
+            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Projects' } }
+        } }
+    });
+}
+
+// 8. Project Heatmap
+async function loadProjectHeatmap() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/project-heatmap?days=${DAYS}${mq}`).then(r => r.json());
+    destroyChart('projectChart');
+    const projects = data.top_projects.slice(0, 10);
+    charts['projectChart'] = new Chart(document.getElementById('projectChart'), {
+        type: 'bar',
+        data: {
+            labels: projects.map(p => p.name),
+            datasets: [{ label: 'Sessions', data: projects.map(p => p.sessions), backgroundColor: COLORS }]
+        },
+        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+
+// 10. Top Prompts
+async function loadTopPrompts() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/top-prompts?days=${DAYS}${mq}`).then(r => r.json());
+    // Word cloud
+    const maxCount = data.top_words.length ? data.top_words[0].count : 1;
+    const cloudColors = ['#6366f1','#8b5cf6','#a78bfa','#c4b5fd','#818cf8','#6366f1','#4f46e5'];
+    let cloud = '';
+    data.top_words.forEach((w, i) => {
+        const size = 0.65 + (w.count / maxCount) * 0.6;
+        const bg = cloudColors[i % cloudColors.length] + '20';
+        const fg = cloudColors[i % cloudColors.length];
+        cloud += `<span class="word-tag" style="font-size:${size}rem;background:${bg};color:${fg}">${escapeHtml(w.word)} (${w.count})</span>`;
+    });
+    document.getElementById('topPromptsWords').innerHTML = cloud || '<span style="color:#9ca3af">No prompts</span>';
+    // List
+    let list = '';
+    data.prompts.slice(0, 15).forEach(p => {
+        list += `<div class="prompt-item"><span class="proj">${escapeHtml(p.project)}</span><span class="text">${escapeHtml(p.text.substring(0,150))}${p.text.length>150?'…':''}</span></div>`;
+    });
+    document.getElementById('topPromptsList').innerHTML = list || '<p style="color:#9ca3af;font-size:0.8rem">No prompts</p>';
+}
+
+// 11. Session Timeline
+async function loadTimeline() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/session-timeline?days=7${mq}`).then(r => r.json());
+    const container = document.getElementById('sessionTimeline');
+    if (!data.length) { container.innerHTML = '<p style="color:#9ca3af;font-size:0.8rem">No sessions in last 7 days</p>'; return; }
+
+    const minTime = new Date(data[0].start_time).getTime();
+    const maxTime = Date.now();
+    const range = maxTime - minTime;
+    const width = container.clientWidth || 600;
+    const rowH = 22;
+    container.style.height = (data.length * rowH + 20) + 'px';
+
+    let html = '';
+    data.forEach((s, i) => {
+        const start = new Date(s.start_time).getTime();
+        const end = s.end_time ? new Date(s.end_time).getTime() : Date.now();
+        const left = ((start - minTime) / range * 100);
+        const w = Math.max(((end - start) / range * 100), 0.5);
+        const proj = (s.working_directory || '').replace(/\\/g,'/').split('/').pop();
+        const color = COLORS[i % COLORS.length];
+        const user = s.logged_in_user ? s.logged_in_user.split('<')[0].trim() : '';
+        html += `<div class="tl-bar" style="left:${left}%;width:${w}%;top:${i*rowH}px;background:${color}" title="${escapeHtml(proj)} | ${escapeHtml(user)} | ${escapeHtml(formatLocalDateTime(s.start_time))}">${escapeHtml(proj)}</div>`;
+    });
+    container.innerHTML = html;
+}
+
+// ── MEDIUM-VALUE REPORTS ──────────────────────────────────
+
+// 12. Resource Health Monitor
+async function loadResourceHealth() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/resource-health?days=${DAYS}${mq}`).then(r => r.json());
+    const o = data.overall;
+
+    document.getElementById('resourceOverall').innerHTML = `
+        <div class="stat-box"><div class="val">${o.avg_cpu || 0}%</div><div class="lbl">Avg CPU</div></div>
+        <div class="stat-box"><div class="val" style="color:${(o.max_cpu||0) > 90 ? '#ef4444' : '#059669'}">${o.max_cpu || 0}%</div><div class="lbl">Peak CPU</div></div>
+        <div class="stat-box"><div class="val">${o.avg_mem || 0}</div><div class="lbl">Avg Mem (MB)</div></div>
+        <div class="stat-box"><div class="val" style="color:${(o.max_mem||0) > 1800 ? '#ef4444' : '#059669'}">${o.max_mem || 0}</div><div class="lbl">Peak Mem (MB)</div></div>
+        <div class="stat-box"><div class="val">${o.sessions_monitored || 0}</div><div class="lbl">Sessions Monitored</div></div>
+    `;
+
+    destroyChart('resourceChart');
+    const daily = data.daily;
+    if (daily.length) {
+        charts['resourceChart'] = new Chart(document.getElementById('resourceChart'), {
+            type: 'line',
+            data: {
+                labels: daily.map(d => d.date.substring(5)),
+                datasets: [
+                    { label: 'Avg CPU %', data: daily.map(d => d.avg_cpu), borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
+                    { label: 'Peak CPU %', data: daily.map(d => d.peak_cpu), borderColor: '#ef4444', borderDash: [4,2], tension: 0.3, pointRadius: 2, yAxisID: 'y' },
+                    { label: 'Avg Mem MB', data: daily.map(d => d.avg_mem_mb), borderColor: '#10b981', tension: 0.3, yAxisID: 'y1' },
+                    { label: 'Peak Mem MB', data: daily.map(d => d.peak_mem_mb), borderColor: '#f59e0b', borderDash: [4,2], tension: 0.3, pointRadius: 2, yAxisID: 'y1' },
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: {
+                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'CPU %' }, position: 'left' },
+                    y1: { beginAtZero: true, title: { display: true, text: 'Memory MB' }, position: 'right', grid: { drawOnChartArea: false } },
+                }
+            }
+        });
+    }
+
+    // Resource hogs table
+    const hogs = data.resource_hogs;
+    if (hogs.length) {
+        let html = '<table><thead><tr><th>Project</th><th>User</th><th>Peak CPU</th><th>Peak Mem</th><th>Avg CPU</th></tr></thead><tbody>';
+        hogs.forEach(h => {
+            const cpuColor = h.peak_cpu > 90 ? '#ef4444' : h.peak_cpu > 70 ? '#f59e0b' : '#059669';
+            const memColor = h.peak_mem_mb > 1800 ? '#ef4444' : h.peak_mem_mb > 1200 ? '#f59e0b' : '#059669';
+            html += `<tr><td>${escapeHtml(h.project)}</td><td>${escapeHtml((h.user_name||'').split('<')[0].trim())}</td>
+                     <td style="color:${cpuColor};font-weight:600">${h.peak_cpu}%</td>
+                     <td style="color:${memColor};font-weight:600">${h.peak_mem_mb} MB</td>
+                     <td>${h.avg_cpu}%</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('resourceHogsTable').innerHTML = html;
+    } else {
+        document.getElementById('resourceHogsTable').innerHTML = '<p style="color:#9ca3af;text-align:center;padding:2rem">No process metrics data</p>';
+    }
+}
+
+// 13. Context Switches
+async function loadContextSwitches() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/context-switches?days=${DAYS}${mq}`).then(r => r.json());
+    const s = data.stats;
+
+    document.getElementById('contextStats').innerHTML = `
+        <div class="stat-box"><div class="val">${s.avg_projects_per_day}</div><div class="lbl">Avg Projects/Day</div></div>
+        <div class="stat-box"><div class="val" style="color:${s.high_switch_days > 5 ? '#f59e0b' : '#059669'}">${s.high_switch_days}</div><div class="lbl">High Switch Days (3+)</div></div>
+        <div class="stat-box"><div class="val">${s.total_days}</div><div class="lbl">Active Days</div></div>
+    `;
+
+    destroyChart('contextChart');
+    const daily = data.daily;
+    if (daily.length) {
+        charts['contextChart'] = new Chart(document.getElementById('contextChart'), {
+            type: 'bar',
+            data: {
+                labels: daily.map(d => d.date.substring(5)),
+                datasets: [
+                    { label: 'Projects', data: daily.map(d => d.unique_projects), backgroundColor: daily.map(d => d.unique_projects >= 3 ? '#f59e0b' : '#6366f1'), yAxisID: 'y' },
+                    { label: 'Sessions', data: daily.map(d => d.sessions), type: 'line', borderColor: '#10b981', tension: 0.3, pointRadius: 3, yAxisID: 'y1' },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Projects' } },
+                    y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Sessions' } },
+                }
+            }
+        });
+    }
+
+    // Per-user table
+    if (data.per_user.length) {
+        let html = '<table><thead><tr><th>User</th><th>Active Days</th><th>Projects</th><th>Avg/Day</th></tr></thead><tbody>';
+        data.per_user.forEach(u => {
+            const name = (u.user_name || 'Unknown').split('<')[0].trim();
+            html += `<tr><td>${escapeHtml(name)}</td><td>${u.active_days}</td><td>${u.total_projects}</td><td>${u.avg_projects_per_day}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('contextUserTable').innerHTML = html;
+    }
+}
+
+// 14. Developer Velocity
+async function loadDevVelocity() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/dev-velocity?days=${DAYS}${mq}`).then(r => r.json());
+    const weeks = data.weeks;
+
+    destroyChart('velocityChart');
+    if (weeks.length) {
+        charts['velocityChart'] = new Chart(document.getElementById('velocityChart'), {
+            type: 'bar',
+            data: {
+                labels: weeks.map(w => w.week),
+                datasets: [
+                    { label: 'Sessions', data: weeks.map(w => w.sessions), backgroundColor: '#6366f1', yAxisID: 'y' },
+                    { label: 'Projects', data: weeks.map(w => w.projects), backgroundColor: '#10b981', yAxisID: 'y' },
+                    { label: 'Cost ($)', data: weeks.map(w => w.cost), type: 'line', borderColor: '#ef4444', tension: 0.3, pointRadius: 4, yAxisID: 'y1' },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Count' } },
+                    y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Cost ($)' } },
+                }
+            }
+        });
+
+        // Table with trend arrows
+        let html = '<table><thead><tr><th>Week</th><th>Sessions</th><th>Projects</th><th>Hours</th><th>Cost</th></tr></thead><tbody>';
+        weeks.forEach(w => {
+            const sArrow = trendArrow(w.sessions_trend);
+            const pArrow = trendArrow(w.projects_trend, true);
+            const costArrow = trendArrow(w.cost_trend, false, true);
+            html += `<tr><td>${w.week}</td><td>${w.sessions} ${sArrow}</td><td>${w.projects} ${pArrow}</td>
+                     <td>${w.hours}</td><td class="cost">$${(w.cost||0).toFixed(2)} ${costArrow}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('velocityTable').innerHTML = html;
+    }
+}
+
+// Velocity by Tag
+async function loadTagVelocity() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/velocity-by-tag?days=${DAYS}${mq}`).then(r => r.json());
+    const byTag = data.by_tag || [];
+
+    document.getElementById('tagVelocityStats').innerHTML = `
+        <div class="stat-box"><div class="val">${byTag.length}</div><div class="lbl">Tags in Use</div></div>
+        <div class="stat-box"><div class="val">${data.untagged_sessions}</div><div class="lbl">Untagged Sessions</div></div>
+    `;
+
+    destroyChart('tagVelocityChart');
+    const weekly = data.weekly || [];
+    if (weekly.length && byTag.length) {
+        const tagNames = byTag.map(t => t.tag);
+        charts['tagVelocityChart'] = new Chart(document.getElementById('tagVelocityChart'), {
+            type: 'bar',
+            data: {
+                labels: weekly.map(w => w.week),
+                datasets: tagNames.map((name, i) => ({
+                    label: name,
+                    data: weekly.map(w => w[name] || 0),
+                    backgroundColor: COLORS[i % COLORS.length],
+                    stack: 'tags',
+                })),
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Sessions' } } },
+            }
+        });
+    }
+
+    if (byTag.length) {
+        let html = '<table><thead><tr><th>Tag</th><th>Sessions</th><th>Hours</th><th>Cost</th></tr></thead><tbody>';
+        byTag.forEach(t => {
+            html += `<tr><td style="text-transform:capitalize">${escapeHtml(t.tag)}</td><td>${t.sessions}</td><td>${t.hours}</td><td class="cost">$${(t.cost||0).toFixed(2)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('tagVelocityTable').innerHTML = html;
+    } else {
+        document.getElementById('tagVelocityTable').innerHTML = '<p class="text-muted">No tagged sessions yet — tag sessions from the Sessions page or a session detail page.</p>';
+    }
+}
+
+function trendArrow(pct, upIsGood = true, downIsGood = false) {
+    if (pct === undefined || pct === null) return '';
+    const abs = Math.abs(pct);
+    if (abs < 5) return '<span style="color:#9ca3af;font-size:0.7rem">—</span>';
+    const up = pct > 0;
+    const good = up ? upIsGood : downIsGood;
+    const color = good ? '#059669' : '#ef4444';
+    const arrow = up ? '▲' : '▼';
+    return `<span style="color:${color};font-size:0.7rem;font-weight:600">${arrow}${abs}%</span>`;
+}
+
+// 15. Adoption & Engagement
+async function loadAdoption() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/adoption?days=${DAYS}${mq}`).then(r => r.json());
+
+    // Adoption curve chart
+    destroyChart('adoptionChart');
+    const curve = data.adoption_curve;
+    if (curve.length) {
+        charts['adoptionChart'] = new Chart(document.getElementById('adoptionChart'), {
+            type: 'line',
+            data: {
+                labels: curve.map(d => d.date.substring(5)),
+                datasets: [
+                    { label: 'Sessions', data: curve.map(d => d.sessions), borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 },
+                    { label: 'Active Machines', data: curve.map(d => d.active_machines), borderColor: '#10b981', tension: 0.3, pointStyle: 'rect' },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Machine engagement table
+    const machines = data.machines;
+    if (machines.length) {
+        let html = '<table><thead><tr><th>User</th><th>Days</th><th>Sessions</th><th>Engage%</th><th>Avg Gap</th></tr></thead><tbody>';
+        machines.forEach(m => {
+            const name = (m.user_name || m.machine_id).split('<')[0].trim();
+            const engColor = m.engagement_pct > 50 ? '#059669' : m.engagement_pct > 25 ? '#f59e0b' : '#ef4444';
+            html += `<tr><td>${escapeHtml(name)}</td><td>${m.active_days}</td><td>${m.total_sessions}</td>
+                     <td style="color:${engColor};font-weight:600">${m.engagement_pct}%</td>
+                     <td>${m.avg_gap_hours}h</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('adoptionTable').innerHTML = html;
+    }
+}
+
+// 16. Exit Analysis
+async function loadExitAnalysis() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/exit-analysis?days=${DAYS}${mq}`).then(r => r.json());
+    const s = data.stats;
+
+    const rateColor = s.success_rate > 90 ? '#059669' : s.success_rate > 70 ? '#f59e0b' : '#ef4444';
+    document.getElementById('exitStats').innerHTML = `
+        <div class="stat-box"><div class="val" style="color:${rateColor}">${s.success_rate}%</div><div class="lbl">Success Rate</div></div>
+        <div class="stat-box"><div class="val">${s.success_count}</div><div class="lbl">Successful</div></div>
+        <div class="stat-box"><div class="val" style="color:${s.error_count > 0 ? '#ef4444' : '#059669'}">${s.error_count}</div><div class="lbl">Errors</div></div>
+    `;
+
+    // Donut chart
+    destroyChart('exitChart');
+    const dist = data.distribution;
+    if (dist.length) {
+        const exitColors = { 'Success (0)': '#10b981', 'Error (1)': '#ef4444', 'Unknown': '#9ca3af', 'Misuse (2)': '#f59e0b' };
+        charts['exitChart'] = new Chart(document.getElementById('exitChart'), {
+            type: 'doughnut',
+            data: {
+                labels: dist.map(d => d.exit_category),
+                datasets: [{ data: dist.map(d => d.count),
+                             backgroundColor: dist.map(d => exitColors[d.exit_category] || COLORS[dist.indexOf(d) % COLORS.length]) }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+        });
+    }
+
+    // Error sessions table
+    const errors = data.error_sessions;
+    if (errors.length) {
+        let html = '<table><thead><tr><th>Project</th><th>User</th><th>Exit</th><th>Model</th><th>When</th></tr></thead><tbody>';
+        errors.forEach(e => {
+            html += `<tr><td>${escapeHtml(e.project)}</td><td>${escapeHtml((e.user_name||'').split('<')[0].trim())}</td>
+                     <td style="color:#ef4444;font-weight:600">${e.exit_code}</td>
+                     <td>${escapeHtml(shortModel(e.model_name))}</td><td>${escapeHtml((e.start_time||'').substring(0,10))}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('exitErrorTable').innerHTML = html;
+    } else {
+        document.getElementById('exitErrorTable').innerHTML = '<p style="color:#059669;text-align:center;padding:1rem">✅ No error sessions</p>';
+    }
+}
+
+// ── NICE-TO-HAVE REPORTS ──────────────────────────────────
+
+// 17. Conversation Depth
+async function loadConversationDepth() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/conversation-depth?days=${DAYS}${mq}`).then(r => r.json());
+    const s = data.stats;
+
+    document.getElementById('depthStats').innerHTML = `
+        <div class="stat-box"><div class="val">${s.total}</div><div class="lbl">Total Sessions</div></div>
+        <div class="stat-box"><div class="val">${s.avg_turns}</div><div class="lbl">Avg Turns</div></div>
+        <div class="stat-box"><div class="val">${s.deepest_turns}</div><div class="lbl">Deepest</div></div>
+        <div class="stat-box"><div class="val">${s.avg_duration_min}m</div><div class="lbl">Avg Duration</div></div>
+    `;
+
+    // Donut
+    destroyChart('depthChart');
+    const dist = data.distribution;
+    const labels = Object.keys(dist);
+    const values = Object.values(dist);
+    if (values.some(v => v > 0)) {
+        charts['depthChart'] = new Chart(document.getElementById('depthChart'), {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{ data: values, backgroundColor: ['#10b981','#6366f1','#f59e0b','#ef4444'] }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+        });
+    }
+
+    // Deep sessions table
+    const deep = data.deep_sessions;
+    if (deep.length) {
+        let html = '<table><thead><tr><th>Project</th><th>User</th><th>Turns</th><th>Duration</th><th>Avg Response</th></tr></thead><tbody>';
+        deep.forEach(d => {
+            html += `<tr><td>${escapeHtml(d.project)}</td><td>${escapeHtml(d.user)}</td>
+                     <td style="font-weight:700;color:#6366f1">${d.turns}</td>
+                     <td>${d.duration_min}m</td><td>${d.avg_response_len} chars</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('depthTable').innerHTML = html;
+    } else {
+        document.getElementById('depthTable').innerHTML = '<p style="color:#9ca3af;text-align:center;padding:1rem">No deep sessions</p>';
+    }
+}
+
+// 18. Working Hours Heatmap
+async function loadWorkingHours() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/working-hours?days=${DAYS}${mq}`).then(r => r.json());
+    const container = document.getElementById('workingHoursContent');
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+    if (!data.users.length) { container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:2rem">No data</p>'; return; }
+
+    let html = '';
+    data.users.forEach(u => {
+        html += `<div class="wh-user-section">
+            <div class="wh-user-header">
+                <span class="wh-user-name">${escapeHtml(u.user)}</span>
+                <span class="burnout-badge ${u.burnout_risk}">${u.burnout_risk} risk</span>
+            </div>
+            <div class="wh-stats">
+                <span>📊 ${u.total_sessions} sessions</span>
+                <span>🌙 ${u.after_hours_count} after-hours (${u.after_hours_pct}%)</span>
+                <span>📅 ${u.weekend_count} weekend (${u.weekend_pct}%)</span>
+            </div>
+            <table class="wh-table"><thead><tr><th></th>`;
+
+        for (let h = 0; h < 24; h++) html += `<th>${h}</th>`;
+        html += '</tr></thead><tbody>';
+
+        for (let d = 0; d < 7; d++) {
+            html += `<tr><th>${dayNames[d]}</th>`;
+            for (let h = 0; h < 24; h++) {
+                const val = u.matrix[d][h];
+                const maxVal = Math.max(...u.matrix.flat(), 1);
+                const intensity = val / maxVal;
+                let color;
+                // Color: grey office hours, red after-hours
+                const isAfterHours = (d === 0 || d === 6) || (h < 8 || h >= 19);
+                if (val === 0) {
+                    color = '#f8fafc';
+                } else if (isAfterHours) {
+                    color = `rgba(239,68,68,${0.2 + intensity * 0.8})`;
+                } else {
+                    color = `rgba(99,102,241,${0.15 + intensity * 0.85})`;
+                }
+                html += `<td><div class="wh-cell" style="background:${color}" title="${dayNames[d]} ${h}:00 — ${val} sessions"></div></td>`;
+            }
+            html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+    });
+    container.innerHTML = html;
+}
+
+// 19. Multi-Machine Comparison
+async function loadMachineComparison() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/machine-comparison?days=${DAYS}${mq}`).then(r => r.json());
+    const machines = data.machines;
+
+    destroyChart('machineCompareChart');
+    if (machines.length >= 2) {
+        charts['machineCompareChart'] = new Chart(document.getElementById('machineCompareChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Sessions', 'Hours', 'Cost ($)', 'Projects', 'Active Days', 'Efficiency %'],
+                datasets: machines.map((m, i) => ({
+                    label: (m.user_name || m.machine_id).split('<')[0].trim(),
+                    data: [m.sessions, m.total_hours, m.total_cost, m.projects, m.active_days, m.output_efficiency],
+                    backgroundColor: COLORS[i % COLORS.length],
+                }))
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+        });
+    } else if (machines.length === 1) {
+        const m = machines[0];
+        document.getElementById('machineCompareChart').parentElement.innerHTML =
+            `<p style="color:#9ca3af;text-align:center;padding:1rem">Only 1 machine detected — comparison requires 2+ machines</p>`;
+    }
+
+    // Comparison table
+    if (machines.length) {
+        let html = '<table><thead><tr><th>Machine</th><th>OS</th><th>Sessions</th><th>Hours</th><th>Cost</th><th>$/Session</th><th>$/Hour</th><th>Efficiency</th><th>Top Model</th></tr></thead><tbody>';
+        machines.forEach(m => {
+            const name = (m.user_name || m.machine_id).split('<')[0].trim();
+            const topModel = m.model_preferences.length ? shortModel(m.model_preferences[0].model) : '—';
+            html += `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(m.os_type || '—')}</td>
+                     <td>${m.sessions}</td><td>${m.total_hours}h</td>
+                     <td class="cost">$${m.total_cost.toFixed(2)}</td>
+                     <td class="cost">$${m.cost_per_session.toFixed(2)}</td>
+                     <td class="cost">$${m.cost_per_hour.toFixed(2)}</td>
+                     <td>${m.output_efficiency}%</td><td>${escapeHtml(topModel)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('machineCompareTable').innerHTML = html;
+    }
+}
+
+// 20. Response Size Trends
+async function loadResponseSizeTrends() {
+    const data = await fetch(`${ROOT_PATH}/api/insights/response-size-trends?days=${DAYS}${mq}`).then(r => r.json());
+    const t = data.trend;
+
+    const trendIcon = t.direction === 'growing' ? '📈' : t.direction === 'shrinking' ? '📉' : '➡️';
+    const trendColor = t.direction === 'growing' ? '#ef4444' : t.direction === 'shrinking' ? '#10b981' : '#6b7280';
+    document.getElementById('responseTrend').innerHTML = `
+        <div class="stat-box"><div class="val">${trendIcon}</div><div class="lbl">${t.direction}</div></div>
+        <div class="stat-box"><div class="val" style="color:${trendColor}">${t.change_pct > 0 ? '+' : ''}${t.change_pct}%</div><div class="lbl">Change (half-over-half)</div></div>
+        <div class="stat-box"><div class="val">${t.overall_avg_chars}</div><div class="lbl">Avg Response (chars)</div></div>
+    `;
+
+    // Dual line chart: response length + prompt length
+    destroyChart('responseSizeChart');
+    const resp = data.daily_response;
+    const prompts = data.daily_prompt;
+    if (resp.length) {
+        // Align dates
+        const allDates = [...new Set([...resp.map(d => d.date), ...prompts.map(d => d.date)])].sort();
+        const respMap = Object.fromEntries(resp.map(d => [d.date, d]));
+        const promptMap = Object.fromEntries(prompts.map(d => [d.date, d]));
+
+        charts['responseSizeChart'] = new Chart(document.getElementById('responseSizeChart'), {
+            type: 'line',
+            data: {
+                labels: allDates.map(d => d.substring(5)),
+                datasets: [
+                    { label: 'Avg Response (chars)', data: allDates.map(d => respMap[d]?.avg_response_len || null),
+                      borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
+                    { label: 'Max Response', data: allDates.map(d => respMap[d]?.max_response_len || null),
+                      borderColor: '#ef4444', borderDash: [4,2], tension: 0.3, pointRadius: 2, yAxisID: 'y' },
+                    { label: 'Avg Prompt (chars)', data: allDates.map(d => promptMap[d]?.avg_prompt_len || null),
+                      borderColor: '#10b981', tension: 0.3, yAxisID: 'y' },
+                ]
+            },
+            options: {
+                responsive: true, spanGaps: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Characters' } } }
+            }
+        });
+    }
+
+    // Per-model table
+    if (data.per_model.length) {
+        let html = '<table><thead><tr><th>Model</th><th>Responses</th><th>Avg Len</th><th>Max Len</th><th>Avg Tokens</th></tr></thead><tbody>';
+        data.per_model.forEach(m => {
+            html += `<tr><td>${escapeHtml(shortModel(m.model_name))}</td><td>${m.count}</td>
+                     <td>${m.avg_len}</td><td>${m.max_len}</td><td>${m.avg_tokens || '—'}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('responseModelTable').innerHTML = html;
+    }
+}
+
+// Load on page init
+loadAll();
+</script>
+{% endblock %}

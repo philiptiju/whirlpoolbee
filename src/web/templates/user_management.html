@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>👥 User Management</h2>
+    <p class="page-subtitle">Team assignment, agent version, and machine details for every registered user — admin-only</p>
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">💻</div>
+        <div class="stat-content">
+            <h3 id="umTotalMachines">-</h3>
+            <p>Registered Users</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🟢</div>
+        <div class="stat-content">
+            <h3 id="umActiveMachines">-</h3>
+            <p>Active Now</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🧑‍🤝‍🧑</div>
+        <div class="stat-content">
+            <h3 id="umTeamCount">-</h3>
+            <p>Teams</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">🚫</div>
+        <div class="stat-content">
+            <h3 id="umUnassignedCount">-</h3>
+            <p>Unassigned to a Team</p>
+        </div>
+    </div>
+</div>
+
+<div class="card um-toolbar-card">
+    <div class="um-toolbar">
+        <div class="um-search-row">
+            <i class="material-icons">search</i>
+            <input type="text" id="umSearchInput" class="um-search-input" placeholder="Search by name, machine, or OS..." oninput="renderUserTable()">
+        </div>
+        <select id="umTeamFilter" class="um-team-filter" onchange="renderUserTable()">
+            <option value="">All Teams</option>
+        </select>
+    </div>
+</div>
+
+<div id="umLoading" class="loading">Loading users...</div>
+<div id="umEmpty" class="empty-state" style="display:none;">
+    <p style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem;">
+        No machines match your search.
+    </p>
+</div>
+
+<div class="card um-table-card" id="umTableCard" style="display:none;">
+    <div class="table-responsive">
+        <table class="um-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Status</th>
+                    <th>Machine</th>
+                    <th>OS</th>
+                    <th>Agent Version</th>
+                    <th>Last Synced</th>
+                    <th>Team</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="umTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Delete-user confirmation modal. Reuses the pr-detail-overlay/panel
+     classes (from style.css) for visual consistency with the other modal
+     in this app, rather than introducing a second set of modal styles. -->
+<div class="pr-detail-overlay" id="umDeleteOverlay">
+    <div class="pr-detail-panel" style="max-width:480px;">
+        <div class="pr-detail-header">
+            <div>
+                <h3>⚠️ Delete user completely?</h3>
+                <div class="text-muted" style="font-size:0.8rem;">This cannot be undone.</div>
+            </div>
+            <button class="pr-detail-close" onclick="closeDeleteConfirm()" aria-label="Close">&times;</button>
+        </div>
+        <div class="pr-detail-body">
+            <p style="margin-top:0;">
+                This permanently deletes <strong id="umDeleteName"></strong>
+                (<code id="umDeleteMachineId"></code>) and every row that references it:
+                all sessions, token usage, messages, tags, PR links, code-quality/AI-suggestion
+                analytics, and — if this is their only machine — their skills, achievements,
+                and learning-path progress.
+            </p>
+            <p style="font-size:0.85rem; color: var(--text-muted);">
+                Type <strong>DELETE</strong> below to confirm.
+            </p>
+            <input type="text" id="umDeleteConfirmInput" class="um-search-input"
+                   style="border:1px solid var(--border-color); border-radius: var(--border-radius-md); padding:0.5rem 0.75rem; width:100%; box-sizing:border-box;"
+                   placeholder="Type DELETE to confirm" oninput="umUpdateDeleteButton()" autocomplete="off">
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.25rem;">
+                <button class="btn btn-secondary" onclick="closeDeleteConfirm()">Cancel</button>
+                <button class="btn btn-danger" id="umDeleteConfirmBtn" disabled onclick="confirmDeleteMachine()">Delete permanently</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.um-toolbar-card { margin: 1.25rem 0; padding: 1rem 1.25rem; }
+.um-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.um-search-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 220px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 0.5rem 0.75rem;
+}
+.um-search-row .material-icons { font-size: 18px; color: var(--text-muted); }
+.um-search-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    flex: 1;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+.um-team-filter {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+.um-table-card { margin-bottom: 2rem; }
+.table-responsive { overflow-x: auto; }
+.um-table { width: 100%; border-collapse: collapse; }
+.um-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+.um-table td {
+    padding: 0.85rem 1.5rem;
+    border-bottom: 1px solid var(--border-color-light);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.um-table tr:hover { background: var(--bg-tertiary); }
+.um-user-cell { display: flex; align-items: center; gap: 0.65rem; }
+.um-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+.um-user-name { font-weight: 600; }
+.um-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.um-status-pill.active { background: var(--success-100); color: var(--success-700); }
+.um-status-pill.inactive { background: var(--gray-100); color: var(--text-muted); }
+.um-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.um-status-pill.active .um-status-dot { background: var(--success-600, #16a34a); }
+.um-status-pill.inactive .um-status-dot { background: var(--text-muted); }
+.um-machine-sub { font-size: 0.75rem; color: var(--text-muted); font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; }
+.um-version-chip {
+    font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+    font-size: 0.75rem;
+    background: var(--bg-tertiary);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--border-radius-sm);
+}
+.um-team-select {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    min-width: 130px;
+}
+.um-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--danger-200, #fecaca);
+    background: var(--danger-50, #fef2f2);
+    color: var(--danger-700, #b91c1c);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.um-delete-btn:hover { background: var(--danger-100, #fee2e2); }
+.um-delete-btn .material-icons { font-size: 16px; }
+.btn-danger {
+    background: var(--danger-600, #dc2626);
+    color: #fff;
+}
+.btn-danger:hover:not(:disabled) { background: var(--danger-700, #b91c1c); }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+#umDeleteConfirmInput:focus { outline: 2px solid var(--primary-400); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+const ROOT_PATH = "{{ request.state.root_path }}";
+let machines = [];
+let groups = [];
+
+const AVATAR_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#f43f5e', '#14b8a6'];
+function colorFor(id) {
+    let hash = 0;
+    const s = id || '?';
+    for (let i = 0; i < s.length; i++) hash = s.charCodeAt(i) + ((hash << 5) - hash);
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+function initialsFor(m) {
+    const name = m.display_name || m.machine_name || m.machine_id || '?';
+    return name.trim().slice(0, 2).toUpperCase();
+}
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+function isActive(m) {
+    return new Date(m.last_seen) > new Date(Date.now() - 3600000);
+}
+
+async function loadGroups() {
+    try {
+        const res = await fetch(`${ROOT_PATH}/api/groups`);
+        groups = await res.json();
+        const filter = document.getElementById('umTeamFilter');
+        filter.innerHTML = '<option value="">All Teams</option><option value="__none__">No Team</option>' +
+            groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+    } catch (error) {
+        console.error('Failed to load groups:', error);
+    }
+}
+
+async function loadMachines() {
+    try {
+        const res = await fetch(`${ROOT_PATH}/api/machines`);
+        machines = await res.json();
+        document.getElementById('umLoading').style.display = 'none';
+        renderSummary();
+        renderUserTable();
+    } catch (error) {
+        console.error('Failed to load machines:', error);
+        document.getElementById('umLoading').textContent = 'Failed to load users.';
+    }
+}
+
+function renderSummary() {
+    document.getElementById('umTotalMachines').textContent = machines.length;
+    document.getElementById('umActiveMachines').textContent = machines.filter(isActive).length;
+    document.getElementById('umTeamCount').textContent = groups.length;
+    document.getElementById('umUnassignedCount').textContent = machines.filter(m => !m.group_id).length;
+}
+
+function filteredMachines() {
+    const q = (document.getElementById('umSearchInput').value || '').trim().toLowerCase();
+    const teamFilter = document.getElementById('umTeamFilter').value;
+    return machines.filter(m => {
+        if (teamFilter === '__none__' && m.group_id) return false;
+        if (teamFilter && teamFilter !== '__none__' && String(m.group_id || '') !== teamFilter) return false;
+        if (!q) return true;
+        const haystack = [m.display_name, m.machine_name, m.machine_id, m.os_type, m.logged_in_user]
+            .filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+    });
+}
+
+function renderUserTable() {
+    const rows = filteredMachines();
+    const tableCard = document.getElementById('umTableCard');
+    const empty = document.getElementById('umEmpty');
+
+    if (!rows.length) {
+        tableCard.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    tableCard.style.display = 'block';
+
+    const groupOptionsFor = (m) => ['<option value="">No Team</option>']
+        .concat(groups.map(g => `<option value="${g.id}" ${String(m.group_id || '') === String(g.id) ? 'selected' : ''}>${escapeHtml(g.name)}</option>`))
+        .join('');
+
+    document.getElementById('umTableBody').innerHTML = rows.map(m => {
+        const active = isActive(m);
+        return `
+            <tr>
+                <td>
+                    <div class="um-user-cell">
+                        <div class="um-avatar" style="background:${colorFor(m.machine_id)};">${initialsFor(m)}</div>
+                        <span class="um-user-name">${escapeHtml(m.display_name)}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="um-status-pill ${active ? 'active' : 'inactive'}">
+                        <span class="um-status-dot"></span>${active ? 'Active' : 'Idle'}
+                    </span>
+                </td>
+                <td>
+                    ${escapeHtml(m.machine_name || m.machine_id)}
+                    <div class="um-machine-sub">${escapeHtml(m.machine_id)}</div>
+                </td>
+                <td>${escapeHtml(m.os_type || 'unknown')}${m.os_version ? ' ' + escapeHtml(m.os_version) : ''}</td>
+                <td><span class="um-version-chip">v${escapeHtml(m.agent_version || 'unknown')}</span></td>
+                <td>${timeAgo(m.last_seen)}</td>
+                <td>
+                    <select class="um-team-select" data-machine-id="${m.machine_id}" title="Assign to team">${groupOptionsFor(m)}</select>
+                </td>
+                <td>
+                    <button class="um-delete-btn" data-machine-id="${m.machine_id}" data-display-name="${escapeHtml(m.display_name || m.machine_id)}" title="Delete this user completely">
+                        <i class="material-icons">delete_forever</i>Delete
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    document.querySelectorAll('.um-team-select').forEach(select => {
+        select.onchange = () => assignMachineGroup(select.dataset.machineId, select.value);
+    });
+    document.querySelectorAll('.um-delete-btn').forEach(btn => {
+        btn.onclick = () => openDeleteConfirm(btn.dataset.machineId, btn.dataset.displayName);
+    });
+}
+
+let umPendingDeleteId = null;
+
+function openDeleteConfirm(machineId, displayName) {
+    umPendingDeleteId = machineId;
+    document.getElementById('umDeleteName').textContent = displayName || machineId;
+    document.getElementById('umDeleteMachineId').textContent = machineId;
+    const input = document.getElementById('umDeleteConfirmInput');
+    input.value = '';
+    umUpdateDeleteButton();
+    document.getElementById('umDeleteOverlay').classList.add('visible');
+}
+
+function closeDeleteConfirm() {
+    umPendingDeleteId = null;
+    document.getElementById('umDeleteOverlay').classList.remove('visible');
+}
+
+function umUpdateDeleteButton() {
+    const input = document.getElementById('umDeleteConfirmInput');
+    document.getElementById('umDeleteConfirmBtn').disabled = input.value.trim().toUpperCase() !== 'DELETE';
+}
+
+async function confirmDeleteMachine() {
+    if (!umPendingDeleteId) return;
+    const btn = document.getElementById('umDeleteConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+        const res = await fetch(`${ROOT_PATH}/api/machines/${umPendingDeleteId}`, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(`Failed to delete user: ${data.error || res.status}`);
+            btn.disabled = false;
+            btn.textContent = 'Delete permanently';
+            return;
+        }
+        machines = machines.filter(m => m.machine_id !== umPendingDeleteId);
+        closeDeleteConfirm();
+        renderSummary();
+        renderUserTable();
+    } catch (error) {
+        console.error('Failed to delete machine:', error);
+        alert('Failed to delete user.');
+        btn.disabled = false;
+        btn.textContent = 'Delete permanently';
+    }
+}
+
+async function assignMachineGroup(machineId, groupId) {
+    try {
+        const res = await fetch(`${ROOT_PATH}/api/machines/${machineId}/group`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ group_id: groupId ? parseInt(groupId, 10) : null })
+        });
+        if (!res.ok) {
+            alert('Failed to update team assignment');
+            return;
+        }
+        const machine = machines.find(m => m.machine_id === machineId);
+        if (machine) machine.group_id = groupId ? parseInt(groupId, 10) : null;
+        renderSummary();
+    } catch (error) {
+        console.error('Failed to assign machine to team:', error);
+        alert('Failed to update team assignment');
+    }
+}
+
+(async function init() {
+    await loadGroups();
+    await loadMachines();
+})();
+
+// This whole script runs inside an IIFE (to keep `machines`/`groups` out of
+// the global scope), but inline onclick/oninput/onchange HTML attributes
+// are evaluated against the *global* scope, not this closure. Expose the
+// handful of functions the template's inline attributes call so they
+// resolve instead of silently throwing a ReferenceError (which is why the
+// delete-confirm button and the search/filter box previously appeared to
+// do nothing).
+window.renderUserTable = renderUserTable;
+window.closeDeleteConfirm = closeDeleteConfirm;
+window.umUpdateDeleteButton = umUpdateDeleteButton;
+window.confirmDeleteMachine = confirmDeleteMachine;
+})();
+</script>
+{% endblock %}

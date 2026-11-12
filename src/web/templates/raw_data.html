@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Raw Data - WhirlpoolBee{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    {% if selected_machine %}
+    <h2>Raw Data — <span class="user-badge">👤 {{ selected_machine.display_name }}</span></h2>
+    {% if selected_machine.machine_name %}
+    <p class="subtitle machine-context-line"><i class="material-icons">devices</i>{{ selected_machine.machine_name }}</p>
+    {% endif %}
+    {% else %}
+    <h2>Raw Data</h2>
+    <p>Recent events and raw metrics</p>
+    {% endif %}
+</div>
+
+<section class="section">
+    <h3>Recent Launches</h3>
+    <div class="table-container">
+        <table id="rawDataTable">
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>User</th>
+                    <th>Machine</th>
+                    <th>Start Time</th>
+                    <th>Working Directory</th>
+                    <th>Duration</th>
+                    <th>Exit Code</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for launch in recent_launches %}
+                <tr>
+                    <td>
+                        {% if launch.session_id %}
+                        <a href="{{ request.state.root_path }}/session/{{ launch.session_id }}" class="session-link">
+                            <code>{{ launch.session_id[:8] }}</code>
+                        </a>
+                        {% else %}
+                        <code>N/A</code>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if launch.logged_in_user %}
+                        <span class="user-tag">👤 {{ launch.logged_in_user.split('<')[0].strip() }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="machine-tag">{{ launch.machine_name or launch.machine_id or '—' }}</span></td>
+                    <td data-utc="{{ launch.start_time }}">{{ launch.start_time[:19] }}</td>
+                    <td><code>{{ launch.working_directory }}</code></td>
+                    <td>
+                        {% if launch.duration_seconds %}
+                            {{ (launch.duration_seconds // 60)|int }} min
+                        {% else %}
+                            <span class="status-active">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ launch.exit_code if launch.exit_code is not none else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="section">
+    <h3>Export Options</h3>
+    <div class="actions">
+        <button onclick="exportJSON()" class="btn">Export as JSON</button>
+        <button onclick="exportCSV()" class="btn">Export as CSV</button>
+    </div>
+</section>
+
+<style>
+.subtitle {
+    color: #6b7280;
+    margin-top: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function exportJSON() {
+    exportTableToJSON('rawDataTable', 'raw_data.json');
+}
+
+function exportCSV() {
+    exportTableToCSV('rawDataTable', 'raw_data.csv');
+}
+</script>
+{% endblock %}

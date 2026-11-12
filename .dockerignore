@@ -1,0 +1,56 @@
+# Dependencies & environments
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# Secrets — never bake these into an image layer; pass at runtime with
+# `docker run --env-file .env` or docker-compose's `env_file:` instead.
+.env
+.env.local
+.env.example
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Data & logs (mounted as volume, not baked in)
+data/
+*.db
+*.db-journal
+logs/
+
+# Documentation (not needed in image)
+docs/
+*.md
+LICENSE
+
+# Tests & dev scripts
+tests/
+migrate_to_multi_machine.py
+
+# Install/service scripts (host-only)
+install.sh
+uninstall.sh
+start.sh
+stop.sh
+start_server.sh
+launchd/
+scripts/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

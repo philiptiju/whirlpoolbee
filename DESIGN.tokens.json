@@ -1,0 +1,73 @@
+{
+  "$schema": "https://impeccable.design/token-schema/1",
+  "meta": {
+    "product": "WhirlpoolBee",
+    "world": "SOLARI vernacular ephemera",
+    "seed": "d4153a89",
+    "recorded": "2026-10-07",
+    "source": "src/web/static/css/style.css"
+  },
+  "color": {
+    "ink":           { "value": "#0D0F14",                    "role": "Primary text; dark gate board base" },
+    "ink-secondary": { "value": "#4B5563",                    "role": "Secondary text, nav items" },
+    "ink-muted":     { "value": "#9CA3AF",                    "role": "Tertiary text, column headers" },
+    "shell":         { "value": "#F5F3EE",                    "role": "Main area background — dominant warm ground" },
+    "shell-dim":     { "value": "#EDEBE6",                    "role": "Nav rail background, stat grid separator" },
+    "shell-press":   { "value": "#E4E1D8",                    "role": "Hover / pressed state on shell surfaces" },
+    "navy":          { "value": "#1C2B4A",                    "role": "Crown, brand strip, active nav, cost stat" },
+    "navy-hover":    { "value": "#243661",                    "role": "Navy interactive hover" },
+    "amber":         { "value": "#F59B22",                    "role": "Live and anomaly signal only — never decorative" },
+    "amber-dim":     { "value": "rgba(245,155,34,0.10)",      "role": "Anomaly row background, ambient amber surface" },
+    "amber-text":    { "value": "#B45309",                    "role": "Amber text on light backgrounds" },
+    "rule":          { "value": "rgba(13,15,20,0.09)",        "role": "Standard hairline separator" },
+    "rule-strong":   { "value": "rgba(13,15,20,0.17)",        "role": "Input borders, card borders, table containers" },
+    "white":         { "value": "#FFFFFF",                    "role": "Input backgrounds, card fills" },
+    "danger":        { "value": "#DC2626",                    "role": "Error states" },
+    "danger-dim":    { "value": "rgba(220,38,38,0.08)",       "role": "Error row background, alert background" },
+    "success":       { "value": "#16A34A",                    "role": "Machine active dot, success alerts" },
+    "success-dim":   { "value": "rgba(22,163,74,0.10)",       "role": "Success alert background" }
+  },
+  "typography": {
+    "font-data": {
+      "value": "'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace",
+      "role": "All data cells, labels, badges, buttons, brand name, crown"
+    },
+    "font-ui": {
+      "value": "'Inter', system-ui, -apple-system, sans-serif",
+      "role": "Nav items, page headings, body prose, inputs"
+    },
+    "base-size":        { "value": "14px" },
+    "base-line-height": { "value": "1.5" }
+  },
+  "scale": {
+    "s1":  { "value": "4px" },
+    "s2":  { "value": "8px" },
+    "s3":  { "value": "12px" },
+    "s4":  { "value": "16px" },
+    "s5":  { "value": "20px" },
+    "s6":  { "value": "24px" },
+    "s8":  { "value": "32px" },
+    "s10": { "value": "40px" }
+  },
+  "radii": {
+    "r0": { "value": "2px", "role": "Status badges, inline code, focus ring" },
+    "r1": { "value": "3px", "role": "Buttons, inputs, cards, table containers — system cap" },
+    "r2": { "value": "4px", "role": "Defined; not in active primary use" },
+    "pill": { "value": "20px", "role": "Tag chip only — sole fully-rounded element" }
+  },
+  "elevation": {
+    "shadow-sm":    { "value": "0 1px 3px rgba(13,15,20,0.07), 0 1px 2px rgba(13,15,20,0.04)", "role": "Reserved" },
+    "shadow-md":    { "value": "0 4px 12px rgba(13,15,20,0.09), 0 2px 4px rgba(13,15,20,0.05)", "role": "Machine selector popover" },
+    "shadow-panel": { "value": "3px 0 20px rgba(13,15,20,0.14)", "role": "Mobile nav drawer" }
+  },
+  "layout": {
+    "nav-width":     { "value": "204px", "role": "Nav rail expanded width" },
+    "nav-collapsed": { "value": "56px",  "role": "Nav rail collapsed (icons-only) width" },
+    "crown-h":       { "value": "52px",  "role": "Page crown and brand strip height" }
+  },
+  "breakpoints": {
+    "mobile":  { "value": "1024px", "role": "Off-canvas nav, mobile topbar shown" },
+    "compact": { "value": "768px",  "role": "Reduced padding, 2-col stat grid, smaller crown stats" },
+    "narrow":  { "value": "480px",  "role": "Crown stats hidden, single-col stat grid" }
+  }
+}
