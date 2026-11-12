@@ -15,7 +15,7 @@ msal==1.28.0
 # Signature verification for the client-agent auto-updater (dev/release
 # use via scripts/sign_agent.py; not required at app runtime, but kept here
 # so the signing script "just works" in this same environment)
-cryptography==42.0.5
+cryptography==50.0.0
 
 # Database
 aiosqlite==0.19.0
